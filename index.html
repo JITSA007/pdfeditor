@@ -27,9 +27,10 @@
 
         .pdf-page-container {
             position: relative;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 40px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             background: white;
+            border-radius: 4px;
         }
 
         .text-layer {
@@ -51,8 +52,9 @@
         }
 
         .smart-edit-active .text-layer span:hover {
-            background-color: rgba(37, 99, 235, 0.15);
-            outline: 1px solid #2563eb;
+            background-color: rgba(37, 99, 235, 0.2);
+            outline: 2px solid #2563eb;
+            border-radius: 2px;
         }
 
         .interaction-layer {
@@ -67,9 +69,11 @@
             pointer-events: auto;
             border: 1px dashed transparent;
             z-index: 30;
+            display: flex;
+            align-items: center;
         }
         .added-element:hover { border-color: #3b82f6; cursor: move; }
-        .added-element.selected { border-color: #2563eb; border-style: solid; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+        .added-element.selected { border-color: #2563eb; border-style: solid; background: rgba(37, 99, 235, 0.05); }
         
         .added-text {
             background: transparent;
@@ -77,29 +81,42 @@
             outline: none;
             color: black;
             white-space: nowrap;
-            padding: 0;
+            padding: 2px;
             margin: 0;
-            line-height: 1.1;
+            line-height: 1;
+            min-width: 10px;
         }
 
         .font-sans-pdf { font-family: Arial, Helvetica, sans-serif; }
         .font-serif-pdf { font-family: 'Times New Roman', Times, serif; }
         .font-mono-pdf { font-family: 'Courier New', Courier, monospace; }
 
-        .added-whiteout { background-color: white; border: 1px solid #ddd; }
-        .added-replace { background-color: white; display: flex; align-items: center; }
+        .added-whiteout { background-color: white; border: 1px solid #e2e8f0; }
+        .added-replace { background-color: white; }
 
         .drawing-layer { position: absolute; top: 0; left: 0; z-index: 15; pointer-events: none; }
         .drawing-layer.active { pointer-events: auto; cursor: crosshair; }
 
         .page-controls {
-            position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
-            background: #1e293b; color: white; padding: 4px 12px; border-radius: 20px;
-            display: flex; gap: 12px; opacity: 0; transition: opacity 0.2s; z-index: 50;
+            position: absolute; top: -45px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: white; padding: 6px 16px; border-radius: 24px;
+            display: flex; gap: 16px; opacity: 0; transition: opacity 0.2s; z-index: 50;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .pdf-page-container:hover .page-controls { opacity: 1; }
 
+        .tool-btn { position: relative; }
         .tool-btn.active { background-color: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+        .tool-btn.active::after {
+            content: ''; position: absolute; bottom: -2px; left: 25%; width: 50%; height: 2px;
+            background: #2563eb; border-radius: 2px;
+        }
+
+        .resize-handle {
+            position: absolute; bottom: -4px; right: -4px; width: 8px; height: 8px;
+            background: #2563eb; border-radius: 50%; cursor: nwse-resize; display: none;
+        }
+        .added-element:hover .resize-handle, .added-element.selected .resize-handle { display: block; }
 
         .spinner {
             width: 40px; height: 40px; border: 4px solid #f3f3f3;
@@ -113,7 +130,9 @@
 
     <header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shadow-sm z-40">
         <div class="flex items-center gap-2">
-            <i class="ph-fill ph-file-pdf text-3xl text-blue-600"></i>
+            <div class="bg-blue-600 p-1.5 rounded-lg">
+                <i class="ph-bold ph-file-pdf text-xl text-white"></i>
+            </div>
             <h1 class="font-bold text-gray-800 tracking-tight hidden sm:block">SmartPDF <span class="text-blue-600">Pro</span></h1>
         </div>
 
@@ -128,26 +147,6 @@
             <button onclick="setTool('text')" id="btn-text" class="tool-btn p-2 rounded-lg transition" title="Add New Text">
                 <i class="ph ph-text-t text-lg"></i>
             </button>
-
-            <!-- Undo/Redo -->
-            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-            <button onclick="undo()" class="p-2 rounded-lg hover:bg-white transition text-gray-600" title="Undo">
-                <i class="ph ph-arrow-u-up-left text-lg"></i>
-            </button>
-            <button onclick="redo()" class="p-2 rounded-lg hover:bg-white transition text-gray-600" title="Redo">
-                <i class="ph ph-arrow-u-up-right text-lg"></i>
-            </button>
-
-            <div id="font-selector-container" class="hidden flex items-center gap-2 ml-2 pl-2 border-l border-gray-300">
-                <select id="font-family-select" onchange="updateSelectedFont()" class="bg-white border border-gray-300 rounded text-sm p-1 outline-none">
-                    <option value="Sans">Sans-Serif</option>
-                    <option value="Serif">Serif (Times)</option>
-                    <option value="Mono">Monospace</option>
-                </select>
-            </div>
-
-            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-            
             <button onclick="setTool('whiteout')" id="btn-whiteout" class="tool-btn p-2 rounded-lg transition" title="Whiteout">
                 <i class="ph ph-eraser text-lg"></i>
             </button>
@@ -158,6 +157,31 @@
                 <i class="ph ph-image text-lg"></i>
             </button>
             <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+
+            <div class="w-px h-6 bg-gray-300 mx-1"></div>
+            
+            <!-- Contextual Controls -->
+            <div id="element-controls" class="hidden flex items-center gap-2 px-2 border-l border-gray-300">
+                <select id="font-family-select" onchange="updateSelectedStyle()" class="bg-white border border-gray-300 rounded text-xs p-1 outline-none">
+                    <option value="Sans">Sans-Serif</option>
+                    <option value="Serif">Serif (Times)</option>
+                    <option value="Mono">Monospace</option>
+                </select>
+                <div class="flex items-center gap-1">
+                    <i class="ph ph-text-aa text-xs text-gray-500"></i>
+                    <input type="number" id="font-size-input" onchange="updateSelectedStyle()" class="w-12 bg-white border border-gray-300 rounded text-xs p-1 outline-none" value="16">
+                </div>
+                <input type="color" id="text-color-input" onchange="updateSelectedStyle()" class="w-6 h-6 border-0 bg-transparent cursor-pointer">
+            </div>
+
+            <div class="w-px h-6 bg-gray-300 mx-1"></div>
+
+            <button onclick="undo()" class="p-2 rounded-lg hover:bg-white transition text-gray-600" title="Undo">
+                <i class="ph ph-arrow-u-up-left text-lg"></i>
+            </button>
+            <button onclick="redo()" class="p-2 rounded-lg hover:bg-white transition text-gray-600" title="Redo">
+                <i class="ph ph-arrow-u-up-right text-lg"></i>
+            </button>
         </div>
 
         <div class="flex items-center gap-2">
@@ -167,7 +191,7 @@
                     <input type="file" id="file-upload" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
                 </label>
             </div>
-            <button id="new-project-btn" onclick="location.reload()" class="hidden bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition text-sm">
+            <button id="new-project-btn" onclick="location.reload()" class="hidden bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition text-sm border border-gray-300">
                 New
             </button>
             <button id="download-btn" onclick="savePDF()" class="hidden bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm shadow-sm">
@@ -178,24 +202,24 @@
 
     <main class="flex-1 overflow-auto bg-gray-100/50 relative p-8 flex justify-center" id="main-area">
         <div id="welcome-screen" class="flex flex-col items-center justify-center h-full text-center">
-            <div class="bg-white p-10 rounded-3xl shadow-xl max-w-md border border-gray-100">
-                <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i class="ph-duotone ph-file-pdf text-4xl text-blue-600"></i>
+            <div class="bg-white p-12 rounded-3xl shadow-xl max-w-md border border-gray-100">
+                <div class="bg-blue-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="ph-duotone ph-file-pdf text-5xl text-blue-600"></i>
                 </div>
-                <h2 class="text-2xl font-bold mb-2">Professional PDF Editor</h2>
-                <p class="text-gray-500 mb-8">Edit text, sign, and organize pages securely in your browser.</p>
-                <label class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold cursor-pointer transition inline-flex items-center gap-2 shadow-lg hover:shadow-blue-500/30">
-                    <i class="ph ph-file-plus text-xl"></i> Choose PDF
+                <h2 class="text-3xl font-bold mb-2 text-gray-800">Professional PDF Editor</h2>
+                <p class="text-gray-500 mb-8">Secure, private, and powerful PDF editing directly in your browser.</p>
+                <label class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold cursor-pointer transition inline-flex items-center gap-3 shadow-lg hover:shadow-blue-500/30">
+                    <i class="ph-bold ph-plus text-xl"></i> Open File
                     <input type="file" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
                 </label>
             </div>
         </div>
-        <div id="pdf-container" class="hidden flex flex-col items-center w-full max-w-5xl pb-20"></div>
+        <div id="pdf-container" class="hidden flex flex-col items-center w-full max-w-6xl pb-32"></div>
     </main>
 
     <div id="loading" class="hidden fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
         <div class="spinner mb-4"></div>
-        <p class="text-gray-600 font-medium animate-pulse" id="loading-text">Loading...</p>
+        <p class="text-gray-600 font-medium animate-pulse" id="loading-text">Processing Document...</p>
     </div>
 
     <script>
@@ -209,7 +233,8 @@
             lastPos: { x: 0, y: 0 },
             selectedElement: null,
             history: [],
-            redoStack: []
+            redoStack: [],
+            maxHistory: 30
         };
 
         const UI = {
@@ -221,8 +246,10 @@
             downloadBtn: document.getElementById('download-btn'),
             loading: document.getElementById('loading'),
             loadingText: document.getElementById('loading-text'),
-            fontSelector: document.getElementById('font-selector-container'),
-            fontFamilySelect: document.getElementById('font-family-select')
+            elementControls: document.getElementById('element-controls'),
+            fontFamilySelect: document.getElementById('font-family-select'),
+            fontSizeInput: document.getElementById('font-size-input'),
+            textColorInput: document.getElementById('text-color-input')
         };
 
         function toggleLoading(show, text = "Processing...") {
@@ -230,11 +257,13 @@
             UI.loadingText.innerText = text;
         }
 
-        // --- History Logic ---
+        // --- Improved History System ---
         function saveToHistory() {
-            const snapshot = Array.from(document.querySelectorAll('.interaction-layer')).map(layer => layer.innerHTML);
-            State.history.push(snapshot);
-            if (State.history.length > 50) State.history.shift();
+            const domSnapshot = Array.from(document.querySelectorAll('.interaction-layer')).map(l => l.innerHTML);
+            const canvasSnapshot = Array.from(document.querySelectorAll('.drawing-layer')).map(c => c.toDataURL());
+            
+            State.history.push({ dom: domSnapshot, canvas: canvasSnapshot });
+            if (State.history.length > State.maxHistory) State.history.shift();
             State.redoStack = [];
         }
 
@@ -242,8 +271,7 @@
             if (State.history.length <= 1) return;
             const current = State.history.pop();
             State.redoStack.push(current);
-            const previous = State.history[State.history.length - 1];
-            restoreState(previous);
+            restoreState(State.history[State.history.length - 1]);
         }
 
         function redo() {
@@ -253,18 +281,25 @@
             restoreState(next);
         }
 
-        function restoreState(snapshot) {
-            const layers = document.querySelectorAll('.interaction-layer');
-            layers.forEach((layer, i) => {
-                layer.innerHTML = snapshot[i] || '';
-                // Re-bind events to restored elements
-                layer.querySelectorAll('.added-element').forEach(el => {
-                    makeDraggable(el);
-                    el.onclick = (e) => { e.stopPropagation(); selectElement(el); };
-                    const delBtn = el.querySelector('button');
-                    if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); el.remove(); deselectAll(); saveToHistory(); };
-                });
+        function restoreState(state) {
+            const intLayers = document.querySelectorAll('.interaction-layer');
+            const drawLayers = document.querySelectorAll('.drawing-layer');
+            
+            intLayers.forEach((l, i) => {
+                l.innerHTML = state.dom[i] || '';
+                l.querySelectorAll('.added-element').forEach(el => bindElementEvents(el));
             });
+            
+            drawLayers.forEach((c, i) => {
+                const ctx = c.getContext('2d');
+                ctx.clearRect(0, 0, c.width, c.height);
+                if (state.canvas[i]) {
+                    const img = new Image();
+                    img.src = state.canvas[i];
+                    img.onload = () => ctx.drawImage(img, 0, 0);
+                }
+            });
+            deselectAll();
         }
 
         async function handleUpload(event) {
@@ -283,7 +318,7 @@
                 UI.downloadBtn.classList.remove('hidden');
                 saveToHistory();
             } catch (err) {
-                alert("Error: " + err.message);
+                alert("Error loading PDF: " + err.message);
             } finally {
                 toggleLoading(false);
             }
@@ -374,15 +409,13 @@
         function deselectAll() {
             document.querySelectorAll('.added-element').forEach(el => el.classList.remove('selected'));
             State.selectedElement = null;
-            UI.fontSelector.classList.add('hidden');
+            UI.elementControls.classList.add('hidden');
         }
 
         function initReplacement(span, layer) {
             const rect = span.getBoundingClientRect();
             const lRect = layer.getBoundingClientRect();
-            const x = rect.left - lRect.left;
-            const y = rect.top - lRect.top;
-            createReplaceBox(x, y, rect.width + 6, rect.height, span.textContent, span.dataset.fontType, layer);
+            createReplaceBox(rect.left - lRect.left, rect.top - lRect.top, rect.width + 4, rect.height, span.textContent, span.dataset.fontType, layer);
             setTool('cursor');
             saveToHistory();
         }
@@ -398,15 +431,14 @@
             input.contentEditable = true;
             input.className = 'added-text';
             input.innerText = text;
-            input.style.fontSize = `${h * 0.9}px`;
-            input.oninput = () => saveToHistory();
+            input.style.fontSize = `${h * 0.95}px`;
+            input.style.color = 'black';
             
-            el.onclick = (e) => { e.stopPropagation(); selectElement(el); };
             el.appendChild(input);
             el.appendChild(createDelBtn(el));
             parent.appendChild(el);
             
-            makeDraggable(el);
+            bindElementEvents(el);
             selectElement(el);
             setTimeout(() => {
                 input.focus();
@@ -414,28 +446,55 @@
             }, 10);
         }
 
+        function bindElementEvents(el) {
+            el.onclick = (e) => { e.stopPropagation(); selectElement(el); };
+            makeDraggable(el);
+            const input = el.querySelector('.added-text');
+            if (input) input.oninput = () => saveToHistory();
+        }
+
         function selectElement(el) {
             deselectAll();
             State.selectedElement = el;
             el.classList.add('selected');
-            if (el.dataset.fontType) {
-                UI.fontSelector.classList.remove('hidden');
-                UI.fontFamilySelect.value = el.dataset.fontType;
+            
+            const input = el.querySelector('.added-text');
+            if (input) {
+                UI.elementControls.classList.remove('hidden');
+                UI.fontFamilySelect.value = el.dataset.fontType || 'Sans';
+                UI.fontSizeInput.value = parseInt(input.style.fontSize) || 16;
+                UI.textColorInput.value = rgbToHex(input.style.color) || '#000000';
+            } else {
+                UI.elementControls.classList.add('hidden');
             }
         }
 
-        function updateSelectedFont() {
+        function rgbToHex(rgb) {
+            if (!rgb) return '#000000';
+            if (rgb.startsWith('#')) return rgb;
+            const res = rgb.match(/\d+/g);
+            if (!res) return '#000000';
+            return "#" + res.slice(0, 3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+        }
+
+        function updateSelectedStyle() {
             if (!State.selectedElement) return;
+            const input = State.selectedElement.querySelector('.added-text');
+            if (!input) return;
+
             const font = UI.fontFamilySelect.value;
             State.selectedElement.dataset.fontType = font;
             State.selectedElement.className = State.selectedElement.className.replace(/font-\w+-pdf/g, '');
             State.selectedElement.classList.add(`font-${font.toLowerCase()}-pdf`);
+            
+            input.style.fontSize = `${UI.fontSizeInput.value}px`;
+            input.style.color = UI.textColorInput.value;
             saveToHistory();
         }
 
         function createTextElement(e, parent) {
             const rect = parent.getBoundingClientRect();
-            createReplaceBox(e.clientX - rect.left, e.clientY - rect.top, 100, 20, 'New Text', 'Sans', parent);
+            createReplaceBox(e.clientX - rect.left, e.clientY - rect.top, 80, 20, 'New Text', 'Sans', parent);
             setTool('cursor');
             saveToHistory();
         }
@@ -446,19 +505,24 @@
             el.className = 'added-element added-whiteout';
             el.style.left = `${e.clientX - rect.left}px`;
             el.style.top = `${e.clientY - rect.top}px`;
-            el.style.width = '80px'; el.style.height = '20px';
-            el.style.resize = 'both'; el.style.overflow = 'hidden';
+            el.style.width = '60px'; el.style.height = '18px';
+            
+            const handle = document.createElement('div');
+            handle.className = 'resize-handle';
+            initResize(handle, el);
+
+            el.appendChild(handle);
             el.appendChild(createDelBtn(el));
             parent.appendChild(el);
-            makeDraggable(el);
+            bindElementEvents(el);
             setTool('cursor');
             saveToHistory();
         }
 
         function createDelBtn(parent) {
             const b = document.createElement('button');
-            b.innerHTML = '&times;';
-            b.className = 'absolute -top-3 -right-3 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow-sm';
+            b.innerHTML = '<i class="ph ph-x"></i>';
+            b.className = 'absolute -top-2.5 -right-2.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition shadow-sm z-50';
             parent.classList.add('group');
             b.onclick = (e) => { e.stopPropagation(); parent.remove(); deselectAll(); saveToHistory(); };
             return b;
@@ -467,7 +531,7 @@
         function makeDraggable(el) {
             let drag = false, sx, sy, il, it;
             el.onmousedown = (e) => {
-                if (State.activeTool !== 'cursor' || e.target.tagName === 'BUTTON') return;
+                if (State.activeTool !== 'cursor' || e.target.tagName === 'BUTTON' || e.target.classList.contains('resize-handle')) return;
                 drag = true; sx = e.clientX; sy = e.clientY;
                 il = el.offsetLeft; it = el.offsetTop;
             };
@@ -479,19 +543,33 @@
             window.onmouseup = () => { if(drag) saveToHistory(); drag = false; };
         }
 
+        function initResize(handle, el) {
+            let res = false, sw, sh, sx, sy;
+            handle.onmousedown = (e) => {
+                e.stopPropagation(); res = true; sx = e.clientX; sy = e.clientY;
+                sw = el.offsetWidth; sh = el.offsetHeight;
+            };
+            window.onmousemove = (e) => {
+                if (!res) return;
+                el.style.width = `${sw + (e.clientX - sx)}px`;
+                el.style.height = `${sh + (e.clientY - sy)}px`;
+            };
+            window.onmouseup = () => { if(res) saveToHistory(); res = false; };
+        }
+
         function initDrawingEvents(canvas) {
             const ctx = canvas.getContext('2d');
-            ctx.lineCap = 'round'; ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2;
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2;
             canvas.onmousedown = (e) => {
                 if (State.activeTool !== 'draw') return;
                 State.isDrawing = true;
                 const r = canvas.getBoundingClientRect();
-                State.lastPos = { x: e.clientX - r.left, y: e.clientY - r.top };
+                State.lastPos = { x: (e.clientX - r.left), y: (e.clientY - r.top) };
             };
             canvas.onmousemove = (e) => {
                 if (!State.isDrawing) return;
                 const r = canvas.getBoundingClientRect();
-                const x = e.clientX - r.left, y = e.clientY - r.top;
+                const x = (e.clientX - r.left), y = (e.clientY - r.top);
                 ctx.beginPath(); ctx.moveTo(State.lastPos.x, State.lastPos.y);
                 ctx.lineTo(x, y); ctx.stroke();
                 State.lastPos = { x, y };
@@ -509,17 +587,13 @@
                     const layer = document.querySelector('.interaction-layer');
                     const el = document.createElement('div');
                     el.className = 'added-element'; el.style.left = '50px'; el.style.top = '50px';
-                    img.style.width = '150px'; img.className = 'pointer-events-none';
+                    img.style.width = '120px'; img.className = 'pointer-events-none block';
                     const h = document.createElement('div');
-                    h.className = 'absolute bottom-0 right-0 w-3 h-3 bg-blue-500 cursor-nwse-resize';
-                    h.onmousedown = (me) => {
-                        me.stopPropagation();
-                        const startW = img.offsetWidth, startX = me.clientX;
-                        window.onmousemove = (we) => img.style.width = `${startW + (we.clientX - startX)}px`;
-                        window.onmouseup = () => { window.onmousemove = null; saveToHistory(); };
-                    };
+                    h.className = 'resize-handle';
+                    initResize(h, el);
+                    
                     el.append(img, h, createDelBtn(el)); layer.appendChild(el);
-                    makeDraggable(el); setTool('cursor');
+                    bindElementEvents(el); setTool('cursor');
                     saveToHistory();
                 };
             };
@@ -527,7 +601,7 @@
         }
 
         async function savePDF() {
-            toggleLoading(true, "Encoding Fonts & Elements...");
+            toggleLoading(true, "Compiling Changes...");
             try {
                 const outPdf = await PDFLib.PDFDocument.create();
                 const fonts = {
@@ -538,56 +612,62 @@
 
                 const containers = document.querySelectorAll('.pdf-page-container');
                 for (let container of containers) {
-                    const data = State.pages.find(p => p.id === container.id);
-                    const [page] = await outPdf.copyPages(State.pdfDoc, [data.originalIndex]);
+                    const pageData = State.pages.find(p => p.id === container.id);
+                    const [page] = await outPdf.copyPages(State.pdfDoc, [pageData.originalIndex]);
                     const newPage = outPdf.addPage(page);
                     const { width, height } = newPage.getSize();
-                    const sX = width / data.width, sY = height / data.height;
+                    const sX = width / pageData.width, sY = height / pageData.height;
 
-                    // Drawings
+                    // 1. Process Drawings
                     const dCanvas = container.querySelector('.drawing-layer');
                     const dData = dCanvas.toDataURL('image/png');
-                    if (dData.length > 500) {
+                    if (dData.length > 1000) { // arbitrary threshold for non-empty
                         const img = await outPdf.embedPng(dData);
-                        newPage.drawImage(img, { x:0, y:0, width, height });
+                        newPage.drawImage(img, { x: 0, y: 0, width, height });
                     }
 
-                    // Elements - Use for...of for async safety
+                    // 2. Process Interaction Layer Elements
                     const elements = container.querySelectorAll('.added-element');
                     for (const el of elements) {
-                        const x = el.offsetLeft * sX, w = el.offsetWidth * sX, h = el.offsetHeight * sY;
-                        const y = height - (el.offsetTop * sY) - h;
+                        const ex = el.offsetLeft * sX, ew = el.offsetWidth * sX, eh = el.offsetHeight * sY;
+                        const ey = height - (el.offsetTop * sY) - eh;
 
-                        // Whiteout
+                        // Case: Whiteout / Replace Box
                         if (el.classList.contains('added-whiteout') || el.classList.contains('added-replace')) {
-                            newPage.drawRectangle({ x, y, width: w, height: h, color: PDFLib.rgb(1, 1, 1) });
+                            newPage.drawRectangle({ x: ex, y: ey, width: ew, height: eh, color: PDFLib.rgb(1, 1, 1) });
                         }
 
-                        // Text
-                        const text = el.querySelector('.added-text');
-                        if (text && text.innerText.trim()) {
+                        // Case: Text
+                        const textDiv = el.querySelector('.added-text');
+                        if (textDiv && textDiv.innerText.trim()) {
                             const fontType = el.dataset.fontType || 'Sans';
-                            const fSize = (parseFloat(text.style.fontSize) || 16) * (width / data.pdfWidth);
-                            newPage.drawText(text.innerText, {
-                                x: x + (2 * sX), y: y + (h/2) - (fSize/3),
-                                size: fSize, font: fonts[fontType], color: PDFLib.rgb(0, 0, 0)
+                            const fSize = (parseFloat(textDiv.style.fontSize) || 16) * (width / pageData.pdfWidth);
+                            const hex = textDiv.style.color || '#000000';
+                            const r = parseInt(hex.slice(1,3), 16)/255, g = parseInt(hex.slice(3,5), 16)/255, b = parseInt(hex.slice(5,7), 16)/255;
+                            
+                            // Fine-tuned Y baseline (approx 3/4 up from box bottom)
+                            const textY = ey + (eh * 0.2); 
+                            
+                            newPage.drawText(textDiv.innerText, {
+                                x: ex + (2 * sX), y: textY,
+                                size: fSize, font: fonts[fontType], color: PDFLib.rgb(r || 0, g || 0, b || 0)
                             });
                         }
                         
-                        // Image
+                        // Case: Images
                         const img = el.querySelector('img');
-                        if (img) {
+                        if (img && !el.classList.contains('added-text')) {
                             try {
                                 const bytes = await fetch(img.src).then(r => r.arrayBuffer());
                                 const embed = await outPdf.embedPng(bytes);
-                                newPage.drawImage(embed, { x, y, width: w, height: h });
-                            } catch(err) { console.error("Image save error", err); }
+                                newPage.drawImage(embed, { x: ex, y: ey, width: ew, height: eh });
+                            } catch(err) { console.error(err); }
                         }
                     }
                 }
                 const bytes = await outPdf.save();
-                download(bytes, "edited_pro.pdf", "application/pdf");
-            } catch (e) { alert(e.message); } finally { toggleLoading(false); }
+                download(bytes, "smart_pdf_pro_export.pdf", "application/pdf");
+            } catch (e) { alert("Save Error: " + e.message); } finally { toggleLoading(false); }
         }
     </script>
 </body>
