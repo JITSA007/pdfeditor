@@ -3,70 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple PDF Editor</title>
-    <!-- Tailwind CSS for styling -->
+    <title>Smart PDF Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PDF.js for rendering -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    
+    <!-- PDF.js (Matched Versions) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-        // Set worker for PDF.js
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        // Set worker immediately after library loads
+        window.addEventListener('load', () => {
+            if(window.pdfjsLib) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+        });
     </script>
-    <!-- PDF-lib for modification -->
+    
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <!-- Download.js for saving -->
     <script src="https://unpkg.com/downloadjs@1.4.7/download.min.js"></script>
-    <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <style>
-        body { background-color: #f3f4f6; }
+        body { background-color: #f3f4f6; overflow: hidden; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
         .pdf-page-container {
             position: relative;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background: white;
         }
-        .pdf-canvas {
-            display: block;
-        }
-        /* Overlay layer for inputs */
-        .page-overlay {
+
+        /* LAYERS */
+        .pdf-canvas { display: block; }
+        
+        .text-layer {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* Let clicks pass through unless on an element */
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden;
+            line-height: 1.0;
+            pointer-events: none; /* Default: let clicks pass to canvas/interaction */
         }
+        
+        /* When Smart Edit is active, text layer becomes interactive */
+        .smart-edit-active .text-layer {
+            pointer-events: auto;
+        }
+
+        .text-layer span {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+        }
+
+        /* Hover effect for text detection */
+        .smart-edit-active .text-layer span:hover {
+            background-color: rgba(59, 130, 246, 0.2); /* Blue highlight */
+            outline: 1px dashed #3b82f6;
+            cursor: pointer;
+        }
+
+        .interaction-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 20;
+            pointer-events: none; 
+        }
+
+        .drawing-layer {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 15;
+            pointer-events: none;
+        }
+        .drawing-layer.active { pointer-events: auto; cursor: crosshair; }
+
+        /* ADDED ELEMENTS */
         .added-element {
             position: absolute;
             pointer-events: auto;
-            cursor: move;
             border: 1px dashed transparent;
+            z-index: 30;
         }
-        .added-element:hover {
-            border: 1px dashed #3b82f6;
-        }
+        .added-element:hover { border-color: #3b82f6; cursor: move; }
+        
         .added-text {
             font-family: Helvetica, sans-serif;
-            font-size: 16px;
             background: transparent;
             border: none;
             outline: none;
             color: black;
             white-space: nowrap;
             padding: 2px;
+            margin: 0;
+            line-height: 1;
         }
-        .added-whiteout {
-            background-color: white;
-            opacity: 1;
+
+        .added-whiteout { background-color: white; opacity: 1; }
+        
+        .added-replace { 
+            background-color: white; 
+            padding: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
         }
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3b82f6;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
+
+        /* Image Element */
+        .added-image { display: block; max-width: 100%; height: auto; user-select: none; }
+        .resize-handle {
+            width: 10px; height: 10px; background: #3b82f6;
+            position: absolute; bottom: -5px; right: -5px;
+            cursor: nwse-resize; display: none;
+        }
+        .added-element:hover .resize-handle { display: block; }
+
+        /* Page Controls */
+        .page-controls {
+            position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: white; padding: 4px 12px; border-radius: 20px;
+            display: flex; gap: 12px; opacity: 0; transition: opacity 0.2s; z-index: 50;
+        }
+        .pdf-page-container:hover .page-controls { opacity: 1; }
+
+        .tool-btn.active { background-color: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6; border-radius: 50%;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -74,200 +143,349 @@
 </head>
 <body class="h-screen flex flex-col font-sans text-gray-800">
 
-    <!-- Header / Toolbar -->
-    <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm z-10 sticky top-0">
-        <div class="flex items-center gap-2">
-            <i class="ph ph-file-pdf text-3xl text-red-500"></i>
-            <h1 class="text-xl font-bold tracking-tight text-gray-700">WebPDF<span class="text-blue-500">Editor</span></h1>
-        </div>
-
-        <div class="flex items-center gap-3" id="toolbar" style="display:none;">
-            <div class="flex bg-gray-100 rounded-lg p-1 border border-gray-200">
-                <button onclick="setTool('cursor')" id="btn-cursor" class="p-2 rounded hover:bg-white hover:shadow transition tool-btn bg-white shadow text-blue-600">
-                    <i class="ph ph-cursor text-lg"></i>
-                </button>
-                <button onclick="setTool('text')" id="btn-text" class="p-2 rounded hover:bg-white hover:shadow transition tool-btn text-gray-600" title="Add Text">
-                    <i class="ph ph-text-t text-lg"></i>
-                </button>
-                <button onclick="setTool('whiteout')" id="btn-whiteout" class="p-2 rounded hover:bg-white hover:shadow transition tool-btn text-gray-600" title="Whiteout / Eraser">
-                    <i class="ph ph-eraser text-lg"></i>
-                </button>
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm z-40">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-50 p-2 rounded-lg">
+                <i class="ph-fill ph-file-pdf text-2xl text-blue-600"></i>
             </div>
-            
-            <button onclick="downloadPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition">
-                <i class="ph ph-download-simple"></i> Download
-            </button>
+            <div>
+                <h1 class="font-bold text-gray-800 leading-tight">SmartPDF</h1>
+                <p class="text-xs text-gray-500">Client-Side Editor</p>
+            </div>
         </div>
 
-        <div id="upload-section">
-            <label class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium cursor-pointer transition flex items-center gap-2">
-                <i class="ph ph-upload-simple"></i> Upload PDF
-                <input type="file" id="file-upload" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
-            </label>
+        <!-- Toolbar -->
+        <div class="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200" id="toolbar" style="display:none;">
+            <button onclick="setTool('cursor')" id="btn-cursor" class="tool-btn active p-2.5 rounded-lg transition flex items-center gap-2 text-sm font-medium" title="Select / Move">
+                <i class="ph ph-cursor text-lg"></i>
+            </button>
+            <div class="w-px h-6 bg-gray-300 mx-1"></div>
+            
+            <button onclick="setTool('smart-edit')" id="btn-smart-edit" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-blue-600 font-bold" title="Click Text to Edit">
+                <i class="ph ph-magic-wand text-lg"></i> <span class="text-xs hidden md:inline">Edit Text</span>
+            </button>
+
+            <button onclick="setTool('text')" id="btn-text" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Add New Text">
+                <i class="ph ph-text-t text-lg"></i>
+            </button>
+            
+            <button onclick="setTool('whiteout')" id="btn-whiteout" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Whiteout">
+                <i class="ph ph-eraser text-lg"></i>
+            </button>
+
+            <button onclick="setTool('draw')" id="btn-draw" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Draw / Sign">
+                <i class="ph ph-pen-nib text-lg"></i>
+            </button>
+
+            <button onclick="triggerImageUpload()" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Add Image">
+                <i class="ph ph-image text-lg"></i>
+            </button>
+            <input type="file" id="image-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleImageUpload(event)">
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-3">
+            <div id="upload-section">
+                <label class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium cursor-pointer transition flex items-center gap-2 shadow-sm shadow-blue-200 text-sm">
+                    <i class="ph ph-upload-simple text-lg"></i> Upload PDF
+                    <input type="file" id="file-upload" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
+                </label>
+            </div>
+            <button id="new-project-btn" onclick="resetEditor()" class="hidden bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2 shadow-sm text-sm">
+                <i class="ph ph-arrow-counter-clockwise text-lg"></i> Reset
+            </button>
+            <button id="download-btn" onclick="savePDF()" class="hidden bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2 shadow-sm shadow-green-200 text-sm">
+                <i class="ph ph-download-simple text-lg"></i> Download
+            </button>
         </div>
     </header>
 
     <!-- Main Workspace -->
-    <main class="flex-1 overflow-auto bg-gray-100 relative p-8 flex justify-center" id="main-area">
+    <main class="flex-1 overflow-auto bg-gray-100/50 relative p-8 flex justify-center" id="main-area">
         
-        <!-- Welcome Screen -->
-        <div id="welcome-screen" class="text-center mt-20">
-            <div class="bg-white p-10 rounded-2xl shadow-xl max-w-lg mx-auto border border-gray-100">
-                <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <i class="ph ph-files text-4xl text-blue-600"></i>
+        <div id="welcome-screen" class="flex flex-col items-center justify-center h-full text-center">
+            <div class="bg-white p-12 rounded-3xl shadow-xl max-w-xl border border-gray-100">
+                <div class="bg-blue-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ring-8 ring-blue-50/50">
+                    <i class="ph-duotone ph-file-pdf text-5xl text-blue-600"></i>
                 </div>
-                <h2 class="text-2xl font-bold mb-2">Upload a PDF to Start</h2>
-                <p class="text-gray-500 mb-8">Edit, sign, and fill out PDF documents directly in your browser. No software required.</p>
-                <label class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold cursor-pointer transition inline-flex items-center gap-2 shadow-lg hover:shadow-blue-500/30">
-                    Select PDF File
+                <h2 class="text-3xl font-bold mb-3 text-gray-800">Editor Ready</h2>
+                <p class="text-gray-500 mb-8">Upload a PDF to edit text, sign, or add images.</p>
+                <label class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold cursor-pointer transition inline-flex items-center gap-2 shadow-lg hover:shadow-blue-500/30">
+                    <i class="ph ph-upload-simple text-xl"></i> Select PDF File
                     <input type="file" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
                 </label>
             </div>
         </div>
 
-        <!-- PDF Container -->
-        <div id="pdf-container" class="hidden flex flex-col items-center pb-20"></div>
+        <div id="pdf-container" class="hidden flex flex-col items-center w-full max-w-5xl pb-20"></div>
 
-        <!-- Loading Indicator -->
-        <div id="loading" class="hidden fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-            <div class="loading-spinner mb-4"></div>
-            <p class="text-gray-600 font-medium">Processing Document...</p>
-        </div>
     </main>
 
+    <!-- Loading Overlay -->
+    <div id="loading" class="hidden fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+        <div class="spinner mb-4"></div>
+        <p class="text-gray-600 font-medium animate-pulse" id="loading-text">Processing...</p>
+    </div>
+
     <script>
-        let currentPDF = null; // Holds the PDF-lib document
-        let pdfBytes = null;   // Raw bytes of the file
-        let activeTool = 'cursor'; // cursor, text, whiteout
-        let pagesConfig = [];  // To store page dimensions for coordinate mapping
-        
+        // --- Setup & State ---
+        const State = {
+            pdfDoc: null,
+            pdfBytes: null,
+            pages: [],
+            activeTool: 'cursor',
+            scale: 1.5,
+            isDrawing: false,
+            lastPos: { x: 0, y: 0 }
+        };
+
         const UI = {
             welcome: document.getElementById('welcome-screen'),
             container: document.getElementById('pdf-container'),
             toolbar: document.getElementById('toolbar'),
-            uploadBtn: document.getElementById('upload-section'),
-            loading: document.getElementById('loading')
+            uploadSection: document.getElementById('upload-section'),
+            newProjectBtn: document.getElementById('new-project-btn'),
+            downloadBtn: document.getElementById('download-btn'),
+            loading: document.getElementById('loading'),
+            loadingText: document.getElementById('loading-text')
         };
 
-        function showLoading(show) {
+        function toggleLoading(show, text = "Processing...") {
             UI.loading.classList.toggle('hidden', !show);
+            UI.loadingText.innerText = text;
         }
 
-        // 1. Handle File Upload
+        // --- File Handling ---
+
         async function handleUpload(event) {
             const file = event.target.files[0];
             if (!file || file.type !== 'application/pdf') return alert('Please upload a valid PDF.');
 
-            showLoading(true);
-
+            toggleLoading(true, "Analyzing PDF Structure...");
+            
             try {
-                // Read file
-                const arrayBuffer = await file.arrayBuffer();
-                pdfBytes = arrayBuffer;
+                // Load for saving
+                State.pdfBytes = await file.arrayBuffer();
+                State.pdfDoc = await PDFLib.PDFDocument.load(State.pdfBytes);
                 
-                // Load into PDF-lib (for saving later)
-                currentPDF = await PDFLib.PDFDocument.load(arrayBuffer);
+                // Render for viewing
+                await renderDocument();
                 
-                // Render with PDF.js (for viewing)
-                await renderPDF(arrayBuffer);
-
-                // Update UI
+                // UI Transitions
                 UI.welcome.classList.add('hidden');
                 UI.container.classList.remove('hidden');
                 UI.toolbar.style.display = 'flex';
-                UI.uploadBtn.classList.add('hidden');
+                UI.uploadSection.classList.add('hidden');
+                UI.newProjectBtn.classList.remove('hidden');
+                UI.downloadBtn.classList.remove('hidden');
             } catch (err) {
                 console.error(err);
-                alert('Error loading PDF: ' + err.message);
+                alert("Failed to load PDF. " + err.message);
             } finally {
-                showLoading(false);
+                toggleLoading(false);
             }
         }
 
-        // 2. Render PDF Pages using PDF.js
-        async function renderPDF(data) {
-            UI.container.innerHTML = '';
-            pagesConfig = []; // Reset page data
+        function resetEditor() {
+            if(State.pdfBytes && !confirm("Close file? Unsaved changes will be lost.")) return;
+            location.reload(); // Simplest full reset
+        }
 
-            const loadingTask = pdfjsLib.getDocument({ data });
+        // --- Rendering ---
+
+        async function renderDocument() {
+            UI.container.innerHTML = '';
+            State.pages = [];
+
+            // Ensure PDF.js is ready
+            if (!window.pdfjsLib) throw new Error("PDF.js library not loaded");
+            
+            const loadingTask = pdfjsLib.getDocument({ data: State.pdfBytes });
             const pdf = await loadingTask.promise;
 
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                const page = await pdf.getPage(pageNum);
-                const viewport = page.getViewport({ scale: 1.5 }); // Scale 1.5 for better quality
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: State.scale });
+                
+                const pageId = `page-${i}`;
+                State.pages.push({
+                    id: pageId,
+                    originalIndex: i - 1,
+                    rotation: 0,
+                    width: viewport.width,
+                    height: viewport.height,
+                    pdfWidth: page.getViewport({ scale: 1 }).width,
+                    pdfHeight: page.getViewport({ scale: 1 }).height
+                });
 
-                // Create container for this page
+                // 1. Main Container
                 const pageContainer = document.createElement('div');
-                pageContainer.className = 'pdf-page-container relative';
+                pageContainer.id = pageId;
+                pageContainer.className = 'pdf-page-container';
                 pageContainer.style.width = `${viewport.width}px`;
                 pageContainer.style.height = `${viewport.height}px`;
 
-                // Canvas for PDF content
+                // 2. Page Controls
+                const controls = document.createElement('div');
+                controls.className = 'page-controls';
+                controls.innerHTML = `
+                    <button onclick="rotatePage('${pageId}', 90)" class="hover:text-blue-400 flex items-center gap-1"><i class="ph-bold ph-arrow-clockwise"></i> Rotate</button>
+                    <div class="w-px bg-gray-600"></div>
+                    <button onclick="deletePage('${pageId}')" class="hover:text-red-400 flex items-center gap-1"><i class="ph-bold ph-trash"></i> Delete</button>
+                    <div class="w-px bg-gray-600"></div>
+                    <span class="text-xs font-mono opacity-50">Pg ${i}</span>
+                `;
+
+                // 3. Canvas Layer
                 const canvas = document.createElement('canvas');
                 canvas.className = 'pdf-canvas';
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
-                const context = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
 
-                await page.render({ canvasContext: context, viewport: viewport }).promise;
-
-                // Overlay div for interactions
-                const overlay = document.createElement('div');
-                overlay.className = 'page-overlay';
-                overlay.dataset.pageNum = pageNum - 1; // 0-based index for PDF-lib
-                overlay.onclick = (e) => handlePageClick(e, overlay, viewport);
-
-                pageContainer.appendChild(canvas);
-                pageContainer.appendChild(overlay);
-                UI.container.appendChild(pageContainer);
-
-                // Store dimensions for coordinate conversion later
-                pagesConfig.push({
-                    width: viewport.width,
-                    height: viewport.height,
-                    originalHeight: page.getViewport({ scale: 1 }).height // Needed for PDF-lib inversion
+                // 4. Text Layer (For detection)
+                const textLayer = document.createElement('div');
+                textLayer.className = 'text-layer';
+                
+                // Get Text Content
+                const textContent = await page.getTextContent();
+                textContent.items.forEach(item => {
+                    const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+                    const fontHeight = Math.sqrt((tx[2] * tx[2]) + (tx[3] * tx[3]));
+                    const div = document.createElement('span');
+                    div.textContent = item.str;
+                    div.style.left = `${tx[4]}px`;
+                    div.style.top = `${tx[5] - fontHeight}px`; // Adjust for baseline
+                    div.style.fontSize = `${fontHeight}px`;
+                    div.style.fontFamily = 'sans-serif';
+                    // Approx width based on PDF data if available, else auto
+                    if(item.width > 0) div.style.width = `${item.width * State.scale}px`; 
+                    
+                    // Interaction: Click text to edit
+                    div.onclick = (e) => {
+                        if (State.activeTool === 'smart-edit') {
+                            e.stopPropagation(); // Stop bubbling
+                            replaceText(div, pageContainer.querySelector('.interaction-layer'));
+                        }
+                    };
+                    textLayer.appendChild(div);
                 });
+
+                // 5. Drawing Layer
+                const drawCanvas = document.createElement('canvas');
+                drawCanvas.className = 'drawing-layer';
+                drawCanvas.width = viewport.width;
+                drawCanvas.height = viewport.height;
+                initDrawingEvents(drawCanvas);
+
+                // 6. Interaction Layer (DOM Elements)
+                const interactionLayer = document.createElement('div');
+                interactionLayer.className = 'interaction-layer';
+                interactionLayer.onclick = (e) => handleLayerClick(e, interactionLayer);
+
+                // Build
+                pageContainer.append(controls, canvas, textLayer, drawCanvas, interactionLayer);
+                UI.container.appendChild(pageContainer);
             }
         }
 
-        // 3. Toolbar Logic
+        // --- Tools & Logic ---
+
         function setTool(tool) {
-            activeTool = tool;
+            State.activeTool = tool;
             
-            // Update button styles
-            document.querySelectorAll('.tool-btn').forEach(btn => {
-                btn.classList.remove('bg-white', 'shadow', 'text-blue-600');
-                btn.classList.add('text-gray-600');
+            // Toggle visual state
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${tool}`)?.classList.add('active');
+
+            // Toggle Text Layer Interactivity
+            document.body.classList.toggle('smart-edit-active', tool === 'smart-edit');
+
+            // Toggle Drawing Layer
+            document.querySelectorAll('.drawing-layer').forEach(l => {
+                l.classList.toggle('active', tool === 'draw');
             });
-            
-            const activeBtn = document.getElementById(`btn-${tool}`);
-            if(activeBtn) {
-                activeBtn.classList.add('bg-white', 'shadow', 'text-blue-600');
-                activeBtn.classList.remove('text-gray-600');
-            }
+
+            if (tool !== 'cursor') window.getSelection().removeAllRanges();
         }
 
-        // 4. Interaction Logic (Clicking on Page)
-        function handlePageClick(e, overlay, viewport) {
-            if (activeTool === 'cursor') return;
+        function handleLayerClick(e, layer) {
+            if (State.activeTool === 'cursor' || State.activeTool === 'draw') return;
 
-            // Get click coordinates relative to the overlay
-            const rect = overlay.getBoundingClientRect();
+            const rect = layer.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            if (activeTool === 'text') {
-                addTextElement(x, y, overlay);
-                setTool('cursor'); // Switch back after placing
-            } else if (activeTool === 'whiteout') {
-                addWhiteoutElement(x, y, overlay);
+            // Fallback: If clicking empty space in smart edit, acts like adding text
+            if (State.activeTool === 'smart-edit') {
+                createReplaceBox(x, y, 100, 20, '', layer); // Empty box
+                setTool('cursor');
+            } else if (State.activeTool === 'text') {
+                createText(x, y, layer);
+                setTool('cursor');
+            } else if (State.activeTool === 'whiteout') {
+                createWhiteout(x, y, layer);
                 setTool('cursor');
             }
         }
 
-        function addTextElement(x, y, parent) {
+        // --- Smart Edit Logic ---
+        
+        function replaceText(textSpan, layer) {
+            // 1. Get dimensions of the detected text
+            const rect = textSpan.getBoundingClientRect();
+            const layerRect = layer.getBoundingClientRect();
+            
+            // Calculate relative position
+            const x = rect.left - layerRect.left;
+            const y = rect.top - layerRect.top;
+            const w = rect.width;
+            const h = rect.height;
+            const originalText = textSpan.textContent;
+
+            // 2. Create the Replacement Box (Whiteout + Input)
+            createReplaceBox(x, y, w + 10, h, originalText, layer); // Add bit of width padding
+            
+            // 3. Switch to cursor mode
+            setTool('cursor');
+        }
+
+        function createReplaceBox(x, y, w, h, text, parent) {
             const el = document.createElement('div');
-            el.className = 'added-element text-element';
+            el.className = 'added-element added-replace';
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            el.style.minWidth = `${Math.max(w, 50)}px`;
+            el.style.minHeight = `${Math.max(h, 16)}px`;
+
+            const input = document.createElement('div');
+            input.contentEditable = true;
+            input.className = 'added-text'; 
+            input.innerText = text;
+            input.style.minWidth = '100%';
+            input.style.fontSize = `${h * 0.8}px`; // Try to match font size roughly
+
+            el.appendChild(createDeleteBtn(el));
+            el.appendChild(input);
+            parent.appendChild(el);
+
+            // Auto focus
+            setTimeout(() => {
+                input.focus();
+                // Select all text so user can just type to replace
+                document.execCommand('selectAll', false, null);
+            }, 50);
+            
+            makeDraggable(el);
+        }
+
+        // --- Element Utils ---
+
+        function createText(x, y, parent) {
+            const el = document.createElement('div');
+            el.className = 'added-element';
             el.style.left = `${x}px`;
             el.style.top = `${y}px`;
 
@@ -275,159 +493,269 @@
             input.contentEditable = true;
             input.className = 'added-text';
             input.innerText = 'Type here';
-            input.style.fontSize = '16px'; // Default UI font size
-            
-            // Auto-focus logic
-            setTimeout(() => {
-                input.focus();
-                document.execCommand('selectAll', false, null);
-            }, 0);
+            input.style.fontSize = '16px'; 
 
-            // Delete on empty blur
-            input.onblur = () => { if(!input.innerText.trim()) el.remove(); };
-
-            // Dragging Logic (Basic)
-            makeDraggable(el);
-
+            el.appendChild(createDeleteBtn(el));
             el.appendChild(input);
             parent.appendChild(el);
+
+            setTimeout(() => input.focus(), 10);
+            makeDraggable(el);
         }
 
-        function addWhiteoutElement(x, y, parent) {
+        function createWhiteout(x, y, parent) {
             const el = document.createElement('div');
-            el.className = 'added-element added-whiteout shadow-sm';
+            el.className = 'added-element added-whiteout';
             el.style.left = `${x}px`;
             el.style.top = `${y}px`;
             el.style.width = '100px';
             el.style.height = '20px';
-            
-            // Allow resizing via CSS resize (simple approach)
             el.style.resize = 'both';
             el.style.overflow = 'hidden';
 
-            // Delete button
-            const closeBtn = document.createElement('button');
-            closeBtn.innerHTML = '&times;';
-            closeBtn.className = 'absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow cursor-pointer hidden group-hover:flex';
-            el.onmouseenter = () => closeBtn.classList.remove('hidden');
-            el.onmouseleave = () => closeBtn.classList.add('hidden');
-            closeBtn.onclick = (e) => { e.stopPropagation(); el.remove(); };
-
-            makeDraggable(el);
-
-            el.appendChild(closeBtn);
+            el.appendChild(createDeleteBtn(el));
             parent.appendChild(el);
+            makeDraggable(el);
+        }
+
+        function createDeleteBtn(parentEl) {
+            const btn = document.createElement('button');
+            btn.innerHTML = '&times;';
+            btn.className = 'absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 hidden group-hover:block z-50';
+            btn.onclick = (e) => { e.stopPropagation(); parentEl.remove(); };
+            parentEl.classList.add('group');
+            return btn;
         }
 
         function makeDraggable(el) {
             let isDragging = false;
             let startX, startY, initialLeft, initialTop;
 
-            el.onmousedown = (e) => {
-                if (e.target !== el && !e.target.classList.contains('added-whiteout')) return; // Allow text selection inside
+            el.addEventListener('mousedown', (e) => {
+                if(State.activeTool !== 'cursor') return;
+                if(e.target.tagName === 'BUTTON' || e.target.classList.contains('resize-handle')) return;
+                
                 isDragging = true;
                 startX = e.clientX;
                 startY = e.clientY;
                 initialLeft = el.offsetLeft;
                 initialTop = el.offsetTop;
                 el.style.cursor = 'grabbing';
-            };
+            });
 
-            window.onmousemove = (e) => {
+            window.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
+                e.preventDefault();
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
                 el.style.left = `${initialLeft + dx}px`;
                 el.style.top = `${initialTop + dy}px`;
-            };
+            });
 
-            window.onmouseup = () => {
+            window.addEventListener('mouseup', () => {
                 isDragging = false;
                 el.style.cursor = 'move';
-            };
+            });
         }
 
-        // 5. Saving the PDF
-        async function downloadPDF() {
-            if (!currentPDF) return;
-            showLoading(true);
+        // --- Drawing ---
+        function initDrawingEvents(canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = 'blue'; 
+            ctx.lineWidth = 2;
 
+            canvas.addEventListener('mousedown', (e) => {
+                if (State.activeTool !== 'draw') return;
+                State.isDrawing = true;
+                const rect = canvas.getBoundingClientRect();
+                State.lastPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!State.isDrawing || State.activeTool !== 'draw') return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                ctx.beginPath();
+                ctx.moveTo(State.lastPos.x, State.lastPos.y);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                State.lastPos = { x, y };
+            });
+
+            ['mouseup', 'mouseout'].forEach(evt => 
+                canvas.addEventListener(evt, () => State.isDrawing = false)
+            );
+        }
+
+        // --- Images ---
+        function triggerImageUpload() { document.getElementById('image-upload').click(); }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const firstPage = document.querySelector('.interaction-layer');
+                    if(firstPage) {
+                        const el = document.createElement('div');
+                        el.className = 'added-element';
+                        el.style.left = '50px'; el.style.top = '50px';
+                        
+                        img.className = 'added-image';
+                        img.style.width = '150px';
+                        
+                        const handle = document.createElement('div');
+                        handle.className = 'resize-handle';
+                        initResize(handle, el, img);
+
+                        el.append(img, handle, createDeleteBtn(el));
+                        firstPage.appendChild(el);
+                        makeDraggable(el);
+                        setTool('cursor');
+                    }
+                };
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+        }
+
+        function initResize(handle, container, img) {
+            let isResizing = false;
+            let startX, startWidth;
+            handle.addEventListener('mousedown', (e) => {
+                e.stopPropagation(); isResizing = true;
+                startX = e.clientX; startWidth = img.offsetWidth;
+            });
+            window.addEventListener('mousemove', (e) => {
+                if(!isResizing) return;
+                const newWidth = Math.max(20, startWidth + (e.clientX - startX));
+                img.style.width = `${newWidth}px`;
+            });
+            window.addEventListener('mouseup', () => isResizing = false);
+        }
+
+        // --- Page Ops ---
+        function rotatePage(pageId, angle) {
+            const p = State.pages.find(pg => pg.id === pageId);
+            if(p) {
+                p.rotation = (p.rotation + angle) % 360;
+                document.getElementById(pageId).style.transform = `rotate(${p.rotation}deg)`;
+            }
+        }
+        function deletePage(pageId) {
+            if(confirm("Delete this page?")) {
+                document.getElementById(pageId).remove();
+                State.pages = State.pages.filter(p => p.id !== pageId);
+            }
+        }
+
+        // --- Save ---
+        async function savePDF() {
+            toggleLoading(true, "Generating PDF...");
             try {
-                const pages = currentPDF.getPages();
-                const overlays = document.querySelectorAll('.page-overlay');
+                const newPdf = await PDFLib.PDFDocument.create();
+                const helveticaFont = await newPdf.embedFont(PDFLib.StandardFonts.Helvetica);
 
-                // Standard font
-                const helveticaFont = await currentPDF.embedFont(PDFLib.StandardFonts.Helvetica);
+                const pageContainers = document.querySelectorAll('.pdf-page-container');
+                
+                for (let container of pageContainers) {
+                    const pageId = container.id;
+                    const pageData = State.pages.find(p => p.id === pageId);
+                    if (!pageData) continue;
 
-                // Loop through each page overlay
-                for (let i = 0; i < overlays.length; i++) {
-                    const overlay = overlays[i];
-                    const pageIndex = parseInt(overlay.dataset.pageNum);
-                    const pdfPage = pages[pageIndex];
-                    const { width, height } = pdfPage.getSize(); // PDF-lib point size
+                    const [copiedPage] = await newPdf.copyPages(State.pdfDoc, [pageData.originalIndex]);
+                    const newPage = newPdf.addPage(copiedPage);
 
-                    // The scale factor between the UI (1.5x) and the PDF (72 DPI)
-                    // We derived UI size from Viewport(1.5). 
-                    // So we must convert: UI_Pixels -> PDF_Points
-                    const uiWidth = pagesConfig[i].width;
-                    const scaleFactor = width / uiWidth;
+                    const currentRotation = newPage.getRotation().angle;
+                    newPage.setRotation(PDFLib.degrees(currentRotation + pageData.rotation));
 
-                    // 1. Process Whiteouts first (so text goes on top)
-                    const whiteouts = overlay.querySelectorAll('.added-whiteout');
-                    whiteouts.forEach(div => {
-                        const x = div.offsetLeft * scaleFactor;
-                        // In PDF, Y starts from bottom. 
-                        // DOM Top: y. PDF y = height - (dom_y + dom_height)
-                        const domY = div.offsetTop;
-                        const domHeight = div.offsetHeight;
-                        const domWidth = div.offsetWidth;
+                    const { width, height } = newPage.getSize();
+                    const scaleX = width / pageData.width;
+                    const scaleY = height / pageData.height;
+
+                    // 1. Embed Drawings
+                    const drawCanvas = container.querySelector('.drawing-layer');
+                    if (drawCanvas) {
+                        const drawData = drawCanvas.toDataURL('image/png');
+                        if (drawData.length > 500) {
+                            const img = await newPdf.embedPng(drawData);
+                            newPage.drawImage(img, { x:0, y:0, width, height });
+                        }
+                    }
+
+                    // 2. Embed Elements
+                    const interactionLayer = container.querySelector('.interaction-layer');
+                    const elements = interactionLayer.querySelectorAll('.added-element');
+                    
+                    for (let el of elements) {
+                        const domX = el.offsetLeft;
+                        const domY = el.offsetTop;
+                        const domW = el.offsetWidth;
+                        const domH = el.offsetHeight;
                         
-                        const pdfHeight = domHeight * scaleFactor;
-                        const pdfWidth = domWidth * scaleFactor;
-                        const pdfY = height - ((domY * scaleFactor) + pdfHeight);
+                        const pdfX = domX * scaleX;
+                        const pdfY = height - (domY * scaleY) - (domH * scaleY);
+                        const pdfW = domW * scaleX;
+                        const pdfH = domH * scaleY;
 
-                        pdfPage.drawRectangle({
-                            x: x,
-                            y: pdfY,
-                            width: pdfWidth,
-                            height: pdfHeight,
-                            color: PDFLib.rgb(1, 1, 1), // White
-                        });
-                    });
+                        // Case A: Image
+                        const imgEl = el.querySelector('img.added-image');
+                        if (imgEl) {
+                            try {
+                                const bytes = await fetch(imgEl.src).then(r => r.arrayBuffer());
+                                const embed = imgEl.src.includes('jpeg') ? await newPdf.embedJpg(bytes) : await newPdf.embedPng(bytes);
+                                // Recalculate H to maintain aspect
+                                const drawnH = (pdfW / embed.width) * embed.height;
+                                const drawnY = height - (domY * scaleY) - drawnH;
+                                newPage.drawImage(embed, { x: pdfX, y: drawnY, width: pdfW, height: drawnH });
+                            } catch(e) { console.error(e); }
+                            continue;
+                        }
 
-                    // 2. Process Text
-                    const textEls = overlay.querySelectorAll('.text-element');
-                    textEls.forEach(div => {
-                        const input = div.querySelector('.added-text');
-                        const text = input.innerText;
-                        if (!text) return;
+                        // Case B: Whiteout or Smart Edit Box (needs white bg)
+                        if (el.classList.contains('added-whiteout') || el.classList.contains('added-replace')) {
+                            newPage.drawRectangle({
+                                x: pdfX, y: pdfY, width: pdfW, height: pdfH,
+                                color: PDFLib.rgb(1, 1, 1)
+                            });
+                        }
 
-                        const x = div.offsetLeft * scaleFactor;
-                        const domY = div.offsetTop;
-                        
-                        // Approx Y adjustment for font baseline
-                        const fontSize = 16 * scaleFactor; // 16px input -> PDF size
-                        const pdfY = height - (domY * scaleFactor) - fontSize + 4; 
+                        // Case C: Text (inside normal text or smart edit)
+                        const textDiv = el.querySelector('.added-text');
+                        if (textDiv && textDiv.innerText.trim()) {
+                            // Rough font size calc
+                            const visualFontSize = parseFloat(textDiv.style.fontSize) || 16;
+                            const pdfFontSize = visualFontSize * (width / pageData.pdfWidth);
+                            
+                            // Adjust Y for baseline
+                            const textY = pdfY + (pdfH / 2) - (pdfFontSize / 3); 
 
-                        pdfPage.drawText(text, {
-                            x: x,
-                            y: pdfY,
-                            size: 16 * scaleFactor, // Scale font size matches zoom
-                            font: helveticaFont,
-                            color: PDFLib.rgb(0, 0, 0),
-                        });
-                    });
+                            newPage.drawText(textDiv.innerText, {
+                                x: pdfX + (4 * scaleX), // padding
+                                y: textY,
+                                size: pdfFontSize,
+                                font: helveticaFont,
+                                color: PDFLib.rgb(0, 0, 0)
+                            });
+                        }
+                    }
                 }
 
-                // Save
-                const pdfBytes = await currentPDF.save();
-                download(pdfBytes, "edited_document.pdf", "application/pdf");
+                const pdfBytes = await newPdf.save();
+                download(pdfBytes, "smart_edited.pdf", "application/pdf");
 
             } catch (err) {
                 console.error(err);
-                alert("Error saving PDF: " + err.message);
+                alert("Error saving: " + err.message);
             } finally {
-                showLoading(false);
+                toggleLoading(false);
             }
         }
     </script>
