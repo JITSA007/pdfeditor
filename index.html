@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart PDF Editor</title>
+    <title>SmartPDF Pro - Advanced Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- PDF.js (Matched Versions) -->
+    <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-        // Set worker immediately after library loads
         window.addEventListener('load', () => {
             if(window.pdfjsLib) {
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -23,49 +22,38 @@
 
     <style>
         body { background-color: #f3f4f6; overflow: hidden; }
-        
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         .pdf-page-container {
             position: relative;
             margin-bottom: 30px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
             background: white;
         }
 
-        /* LAYERS */
-        .pdf-canvas { display: block; }
-        
+        /* Text Layer Styles */
         .text-layer {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             overflow: hidden;
             line-height: 1.0;
-            pointer-events: none; /* Default: let clicks pass to canvas/interaction */
+            pointer-events: none;
         }
         
-        /* When Smart Edit is active, text layer becomes interactive */
-        .smart-edit-active .text-layer {
-            pointer-events: auto;
-        }
+        .smart-edit-active .text-layer { pointer-events: auto; }
 
         .text-layer span {
             color: transparent;
             position: absolute;
             white-space: pre;
-            cursor: text;
+            cursor: pointer;
             transform-origin: 0% 0%;
         }
 
-        /* Hover effect for text detection */
         .smart-edit-active .text-layer span:hover {
-            background-color: rgba(59, 130, 246, 0.2); /* Blue highlight */
-            outline: 1px dashed #3b82f6;
-            cursor: pointer;
+            background-color: rgba(37, 99, 235, 0.15);
+            outline: 1px solid #2563eb;
         }
 
         .interaction-layer {
@@ -75,15 +63,7 @@
             pointer-events: none; 
         }
 
-        .drawing-layer {
-            position: absolute;
-            top: 0; left: 0;
-            z-index: 15;
-            pointer-events: none;
-        }
-        .drawing-layer.active { pointer-events: auto; cursor: crosshair; }
-
-        /* ADDED ELEMENTS */
+        /* Added Elements */
         .added-element {
             position: absolute;
             pointer-events: auto;
@@ -91,39 +71,30 @@
             z-index: 30;
         }
         .added-element:hover { border-color: #3b82f6; cursor: move; }
+        .added-element.selected { border-color: #2563eb; border-style: solid; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
         
         .added-text {
-            font-family: Helvetica, sans-serif;
             background: transparent;
             border: none;
             outline: none;
             color: black;
             white-space: nowrap;
-            padding: 2px;
-            margin: 0;
-            line-height: 1;
-        }
-
-        .added-whiteout { background-color: white; opacity: 1; }
-        
-        .added-replace { 
-            background-color: white; 
             padding: 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
+            margin: 0;
+            line-height: 1.1;
         }
 
-        /* Image Element */
-        .added-image { display: block; max-width: 100%; height: auto; user-select: none; }
-        .resize-handle {
-            width: 10px; height: 10px; background: #3b82f6;
-            position: absolute; bottom: -5px; right: -5px;
-            cursor: nwse-resize; display: none;
-        }
-        .added-element:hover .resize-handle { display: block; }
+        /* Font Classes */
+        .font-sans-pdf { font-family: Arial, Helvetica, sans-serif; }
+        .font-serif-pdf { font-family: 'Times New Roman', Times, serif; }
+        .font-mono-pdf { font-family: 'Courier New', Courier, monospace; }
 
-        /* Page Controls */
+        .added-whiteout { background-color: white; }
+        .added-replace { background-color: white; display: flex; align-items: center; }
+
+        .drawing-layer { position: absolute; top: 0; left: 0; z-index: 15; pointer-events: none; }
+        .drawing-layer.active { pointer-events: auto; cursor: crosshair; }
+
         .page-controls {
             position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
             background: #1e293b; color: white; padding: 4px 12px; border-radius: 20px;
@@ -143,93 +114,86 @@
 </head>
 <body class="h-screen flex flex-col font-sans text-gray-800">
 
-    <!-- Header -->
-    <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm z-40">
-        <div class="flex items-center gap-3">
-            <div class="bg-blue-50 p-2 rounded-lg">
-                <i class="ph-fill ph-file-pdf text-2xl text-blue-600"></i>
-            </div>
-            <div>
-                <h1 class="font-bold text-gray-800 leading-tight">SmartPDF</h1>
-                <p class="text-xs text-gray-500">Client-Side Editor</p>
-            </div>
+    <header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shadow-sm z-40">
+        <div class="flex items-center gap-2">
+            <i class="ph-fill ph-file-pdf text-3xl text-blue-600"></i>
+            <h1 class="font-bold text-gray-800 tracking-tight hidden sm:block">SmartPDF <span class="text-blue-600">Pro</span></h1>
         </div>
 
         <!-- Toolbar -->
-        <div class="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200" id="toolbar" style="display:none;">
-            <button onclick="setTool('cursor')" id="btn-cursor" class="tool-btn active p-2.5 rounded-lg transition flex items-center gap-2 text-sm font-medium" title="Select / Move">
+        <div class="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200" id="toolbar" style="display:none;">
+            <button onclick="setTool('cursor')" id="btn-cursor" class="tool-btn active p-2 rounded-lg transition" title="Move Tool">
                 <i class="ph ph-cursor text-lg"></i>
             </button>
-            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-            
-            <button onclick="setTool('smart-edit')" id="btn-smart-edit" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-blue-600 font-bold" title="Click Text to Edit">
-                <i class="ph ph-magic-wand text-lg"></i> <span class="text-xs hidden md:inline">Edit Text</span>
+            <button onclick="setTool('smart-edit')" id="btn-smart-edit" class="tool-btn p-2 rounded-lg transition text-blue-600" title="Smart Text Replacement">
+                <i class="ph ph-magic-wand text-lg"></i>
             </button>
-
-            <button onclick="setTool('text')" id="btn-text" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Add New Text">
+            <button onclick="setTool('text')" id="btn-text" class="tool-btn p-2 rounded-lg transition" title="Add New Text">
                 <i class="ph ph-text-t text-lg"></i>
             </button>
+
+            <!-- Font Selector (Visible when text selected) -->
+            <div id="font-selector-container" class="hidden flex items-center gap-2 ml-2 pl-2 border-l border-gray-300">
+                <select id="font-family-select" onchange="updateSelectedFont()" class="bg-white border border-gray-300 rounded text-sm p-1 outline-none">
+                    <option value="Sans">Sans-Serif</option>
+                    <option value="Serif">Serif (Times)</option>
+                    <option value="Mono">Monospace</option>
+                </select>
+            </div>
+
+            <div class="w-px h-6 bg-gray-300 mx-1"></div>
             
-            <button onclick="setTool('whiteout')" id="btn-whiteout" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Whiteout">
+            <button onclick="setTool('whiteout')" id="btn-whiteout" class="tool-btn p-2 rounded-lg transition" title="Whiteout">
                 <i class="ph ph-eraser text-lg"></i>
             </button>
-
-            <button onclick="setTool('draw')" id="btn-draw" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Draw / Sign">
+            <button onclick="setTool('draw')" id="btn-draw" class="tool-btn p-2 rounded-lg transition" title="Sign / Draw">
                 <i class="ph ph-pen-nib text-lg"></i>
             </button>
-
-            <button onclick="triggerImageUpload()" class="tool-btn p-2.5 rounded-lg hover:bg-white hover:shadow-sm transition text-gray-600" title="Add Image">
+            <button onclick="triggerImageUpload()" class="tool-btn p-2 rounded-lg transition" title="Add Image">
                 <i class="ph ph-image text-lg"></i>
             </button>
-            <input type="file" id="image-upload" accept="image/png, image/jpeg" class="hidden" onchange="handleImageUpload(event)">
+            <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
         </div>
 
-        <!-- Actions -->
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
             <div id="upload-section">
-                <label class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium cursor-pointer transition flex items-center gap-2 shadow-sm shadow-blue-200 text-sm">
-                    <i class="ph ph-upload-simple text-lg"></i> Upload PDF
+                <label class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium cursor-pointer transition flex items-center gap-2 text-sm shadow-sm">
+                    <i class="ph ph-upload-simple"></i> Upload
                     <input type="file" id="file-upload" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
                 </label>
             </div>
-            <button id="new-project-btn" onclick="resetEditor()" class="hidden bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2 shadow-sm text-sm">
-                <i class="ph ph-arrow-counter-clockwise text-lg"></i> Reset
+            <button id="new-project-btn" onclick="location.reload()" class="hidden bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition text-sm">
+                New
             </button>
-            <button id="download-btn" onclick="savePDF()" class="hidden bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg font-medium transition flex items-center gap-2 shadow-sm shadow-green-200 text-sm">
-                <i class="ph ph-download-simple text-lg"></i> Download
+            <button id="download-btn" onclick="savePDF()" class="hidden bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm shadow-sm">
+                <i class="ph ph-download-simple"></i> Download
             </button>
         </div>
     </header>
 
-    <!-- Main Workspace -->
     <main class="flex-1 overflow-auto bg-gray-100/50 relative p-8 flex justify-center" id="main-area">
-        
         <div id="welcome-screen" class="flex flex-col items-center justify-center h-full text-center">
-            <div class="bg-white p-12 rounded-3xl shadow-xl max-w-xl border border-gray-100">
-                <div class="bg-blue-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ring-8 ring-blue-50/50">
-                    <i class="ph-duotone ph-file-pdf text-5xl text-blue-600"></i>
+            <div class="bg-white p-10 rounded-3xl shadow-xl max-w-md border border-gray-100">
+                <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="ph-duotone ph-file-pdf text-4xl text-blue-600"></i>
                 </div>
-                <h2 class="text-3xl font-bold mb-3 text-gray-800">Editor Ready</h2>
-                <p class="text-gray-500 mb-8">Upload a PDF to edit text, sign, or add images.</p>
-                <label class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold cursor-pointer transition inline-flex items-center gap-2 shadow-lg hover:shadow-blue-500/30">
-                    <i class="ph ph-upload-simple text-xl"></i> Select PDF File
+                <h2 class="text-2xl font-bold mb-2">Professional PDF Editor</h2>
+                <p class="text-gray-500 mb-8">Edit text, sign, and organize pages securely in your browser.</p>
+                <label class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold cursor-pointer transition inline-flex items-center gap-2 shadow-lg hover:shadow-blue-500/30">
+                    <i class="ph ph-file-plus text-xl"></i> Choose PDF
                     <input type="file" accept="application/pdf" class="hidden" onchange="handleUpload(event)">
                 </label>
             </div>
         </div>
-
         <div id="pdf-container" class="hidden flex flex-col items-center w-full max-w-5xl pb-20"></div>
-
     </main>
 
-    <!-- Loading Overlay -->
-    <div id="loading" class="hidden fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+    <div id="loading" class="hidden fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
         <div class="spinner mb-4"></div>
-        <p class="text-gray-600 font-medium animate-pulse" id="loading-text">Processing...</p>
+        <p class="text-gray-600 font-medium animate-pulse" id="loading-text">Loading...</p>
     </div>
 
     <script>
-        // --- Setup & State ---
         const State = {
             pdfDoc: null,
             pdfBytes: null,
@@ -237,7 +201,8 @@
             activeTool: 'cursor',
             scale: 1.5,
             isDrawing: false,
-            lastPos: { x: 0, y: 0 }
+            lastPos: { x: 0, y: 0 },
+            selectedElement: null
         };
 
         const UI = {
@@ -248,7 +213,9 @@
             newProjectBtn: document.getElementById('new-project-btn'),
             downloadBtn: document.getElementById('download-btn'),
             loading: document.getElementById('loading'),
-            loadingText: document.getElementById('loading-text')
+            loadingText: document.getElementById('loading-text'),
+            fontSelector: document.getElementById('font-selector-container'),
+            fontFamilySelect: document.getElementById('font-family-select')
         };
 
         function toggleLoading(show, text = "Processing...") {
@@ -256,23 +223,14 @@
             UI.loadingText.innerText = text;
         }
 
-        // --- File Handling ---
-
         async function handleUpload(event) {
             const file = event.target.files[0];
-            if (!file || file.type !== 'application/pdf') return alert('Please upload a valid PDF.');
-
-            toggleLoading(true, "Analyzing PDF Structure...");
-            
+            if (!file) return;
+            toggleLoading(true, "Opening Document...");
             try {
-                // Load for saving
                 State.pdfBytes = await file.arrayBuffer();
                 State.pdfDoc = await PDFLib.PDFDocument.load(State.pdfBytes);
-                
-                // Render for viewing
                 await renderDocument();
-                
-                // UI Transitions
                 UI.welcome.classList.add('hidden');
                 UI.container.classList.remove('hidden');
                 UI.toolbar.style.display = 'flex';
@@ -280,483 +238,301 @@
                 UI.newProjectBtn.classList.remove('hidden');
                 UI.downloadBtn.classList.remove('hidden');
             } catch (err) {
-                console.error(err);
-                alert("Failed to load PDF. " + err.message);
+                alert("Error: " + err.message);
             } finally {
                 toggleLoading(false);
             }
         }
-
-        function resetEditor() {
-            if(State.pdfBytes && !confirm("Close file? Unsaved changes will be lost.")) return;
-            location.reload(); // Simplest full reset
-        }
-
-        // --- Rendering ---
 
         async function renderDocument() {
             UI.container.innerHTML = '';
             State.pages = [];
-
-            // Ensure PDF.js is ready
-            if (!window.pdfjsLib) throw new Error("PDF.js library not loaded");
-            
-            const loadingTask = pdfjsLib.getDocument({ data: State.pdfBytes });
-            const pdf = await loadingTask.promise;
+            const pdf = await pdfjsLib.getDocument({ data: State.pdfBytes }).promise;
 
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const viewport = page.getViewport({ scale: State.scale });
-                
                 const pageId = `page-${i}`;
+                
                 State.pages.push({
-                    id: pageId,
-                    originalIndex: i - 1,
-                    rotation: 0,
-                    width: viewport.width,
-                    height: viewport.height,
+                    id: pageId, originalIndex: i - 1, rotation: 0,
+                    width: viewport.width, height: viewport.height,
                     pdfWidth: page.getViewport({ scale: 1 }).width,
                     pdfHeight: page.getViewport({ scale: 1 }).height
                 });
 
-                // 1. Main Container
-                const pageContainer = document.createElement('div');
-                pageContainer.id = pageId;
-                pageContainer.className = 'pdf-page-container';
-                pageContainer.style.width = `${viewport.width}px`;
-                pageContainer.style.height = `${viewport.height}px`;
+                const container = document.createElement('div');
+                container.id = pageId;
+                container.className = 'pdf-page-container';
+                container.style.width = `${viewport.width}px`;
+                container.style.height = `${viewport.height}px`;
 
-                // 2. Page Controls
-                const controls = document.createElement('div');
-                controls.className = 'page-controls';
-                controls.innerHTML = `
-                    <button onclick="rotatePage('${pageId}', 90)" class="hover:text-blue-400 flex items-center gap-1"><i class="ph-bold ph-arrow-clockwise"></i> Rotate</button>
-                    <div class="w-px bg-gray-600"></div>
-                    <button onclick="deletePage('${pageId}')" class="hover:text-red-400 flex items-center gap-1"><i class="ph-bold ph-trash"></i> Delete</button>
-                    <div class="w-px bg-gray-600"></div>
-                    <span class="text-xs font-mono opacity-50">Pg ${i}</span>
-                `;
-
-                // 3. Canvas Layer
                 const canvas = document.createElement('canvas');
                 canvas.className = 'pdf-canvas';
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext('2d');
-                await page.render({ canvasContext: ctx, viewport }).promise;
+                canvas.width = viewport.width; canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-                // 4. Text Layer (For detection)
                 const textLayer = document.createElement('div');
                 textLayer.className = 'text-layer';
-                
-                // Get Text Content
                 const textContent = await page.getTextContent();
+                
                 textContent.items.forEach(item => {
                     const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
                     const fontHeight = Math.sqrt((tx[2] * tx[2]) + (tx[3] * tx[3]));
-                    const div = document.createElement('span');
-                    div.textContent = item.str;
-                    div.style.left = `${tx[4]}px`;
-                    div.style.top = `${tx[5] - fontHeight}px`; // Adjust for baseline
-                    div.style.fontSize = `${fontHeight}px`;
-                    div.style.fontFamily = 'sans-serif';
-                    // Approx width based on PDF data if available, else auto
-                    if(item.width > 0) div.style.width = `${item.width * State.scale}px`; 
+                    const span = document.createElement('span');
+                    span.textContent = item.str;
+                    span.style.left = `${tx[4]}px`;
+                    span.style.top = `${tx[5] - fontHeight}px`;
+                    span.style.fontSize = `${fontHeight}px`;
                     
-                    // Interaction: Click text to edit
-                    div.onclick = (e) => {
+                    // GUESSED FONT TYPE
+                    let fontType = 'Sans';
+                    const name = (item.fontName || '').toLowerCase();
+                    if (name.includes('times') || name.includes('serif')) fontType = 'Serif';
+                    if (name.includes('courier') || name.includes('mono')) fontType = 'Mono';
+                    span.dataset.fontType = fontType;
+
+                    span.onclick = (e) => {
                         if (State.activeTool === 'smart-edit') {
-                            e.stopPropagation(); // Stop bubbling
-                            replaceText(div, pageContainer.querySelector('.interaction-layer'));
+                            e.stopPropagation();
+                            initReplacement(span, container.querySelector('.interaction-layer'));
                         }
                     };
-                    textLayer.appendChild(div);
+                    textLayer.appendChild(span);
                 });
 
-                // 5. Drawing Layer
                 const drawCanvas = document.createElement('canvas');
                 drawCanvas.className = 'drawing-layer';
-                drawCanvas.width = viewport.width;
-                drawCanvas.height = viewport.height;
+                drawCanvas.width = viewport.width; drawCanvas.height = viewport.height;
                 initDrawingEvents(drawCanvas);
 
-                // 6. Interaction Layer (DOM Elements)
-                const interactionLayer = document.createElement('div');
-                interactionLayer.className = 'interaction-layer';
-                interactionLayer.onclick = (e) => handleLayerClick(e, interactionLayer);
+                const interactLayer = document.createElement('div');
+                interactLayer.className = 'interaction-layer';
+                interactLayer.onclick = (e) => {
+                    if (State.activeTool === 'text') createTextElement(e, interactLayer);
+                    if (State.activeTool === 'whiteout') createWhiteout(e, interactLayer);
+                };
 
-                // Build
-                pageContainer.append(controls, canvas, textLayer, drawCanvas, interactionLayer);
-                UI.container.appendChild(pageContainer);
+                container.append(canvas, textLayer, drawCanvas, interactLayer);
+                UI.container.appendChild(container);
             }
         }
-
-        // --- Tools & Logic ---
 
         function setTool(tool) {
             State.activeTool = tool;
-            
-            // Toggle visual state
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(`btn-${tool}`)?.classList.add('active');
-
-            // Toggle Text Layer Interactivity
             document.body.classList.toggle('smart-edit-active', tool === 'smart-edit');
-
-            // Toggle Drawing Layer
-            document.querySelectorAll('.drawing-layer').forEach(l => {
-                l.classList.toggle('active', tool === 'draw');
-            });
-
-            if (tool !== 'cursor') window.getSelection().removeAllRanges();
+            document.querySelectorAll('.drawing-layer').forEach(l => l.classList.toggle('active', tool === 'draw'));
+            deselectAll();
         }
 
-        function handleLayerClick(e, layer) {
-            if (State.activeTool === 'cursor' || State.activeTool === 'draw') return;
-
-            const rect = layer.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            // Fallback: If clicking empty space in smart edit, acts like adding text
-            if (State.activeTool === 'smart-edit') {
-                createReplaceBox(x, y, 100, 20, '', layer); // Empty box
-                setTool('cursor');
-            } else if (State.activeTool === 'text') {
-                createText(x, y, layer);
-                setTool('cursor');
-            } else if (State.activeTool === 'whiteout') {
-                createWhiteout(x, y, layer);
-                setTool('cursor');
-            }
+        function deselectAll() {
+            document.querySelectorAll('.added-element').forEach(el => el.classList.remove('selected'));
+            State.selectedElement = null;
+            UI.fontSelector.classList.add('hidden');
         }
 
-        // --- Smart Edit Logic ---
-        
-        function replaceText(textSpan, layer) {
-            // 1. Get dimensions of the detected text
-            const rect = textSpan.getBoundingClientRect();
-            const layerRect = layer.getBoundingClientRect();
+        function initReplacement(span, layer) {
+            const rect = span.getBoundingClientRect();
+            const lRect = layer.getBoundingClientRect();
+            const x = rect.left - lRect.left;
+            const y = rect.top - lRect.top;
             
-            // Calculate relative position
-            const x = rect.left - layerRect.left;
-            const y = rect.top - layerRect.top;
-            const w = rect.width;
-            const h = rect.height;
-            const originalText = textSpan.textContent;
-
-            // 2. Create the Replacement Box (Whiteout + Input)
-            createReplaceBox(x, y, w + 10, h, originalText, layer); // Add bit of width padding
-            
-            // 3. Switch to cursor mode
+            createReplaceBox(x, y, rect.width + 6, rect.height, span.textContent, span.dataset.fontType, layer);
             setTool('cursor');
         }
 
-        function createReplaceBox(x, y, w, h, text, parent) {
+        function createReplaceBox(x, y, w, h, text, fontType, parent) {
             const el = document.createElement('div');
-            el.className = 'added-element added-replace';
-            el.style.left = `${x}px`;
-            el.style.top = `${y}px`;
-            el.style.minWidth = `${Math.max(w, 50)}px`;
-            el.style.minHeight = `${Math.max(h, 16)}px`;
-
-            const input = document.createElement('div');
-            input.contentEditable = true;
-            input.className = 'added-text'; 
-            input.innerText = text;
-            input.style.minWidth = '100%';
-            input.style.fontSize = `${h * 0.8}px`; // Try to match font size roughly
-
-            el.appendChild(createDeleteBtn(el));
-            el.appendChild(input);
-            parent.appendChild(el);
-
-            // Auto focus
-            setTimeout(() => {
-                input.focus();
-                // Select all text so user can just type to replace
-                document.execCommand('selectAll', false, null);
-            }, 50);
-            
-            makeDraggable(el);
-        }
-
-        // --- Element Utils ---
-
-        function createText(x, y, parent) {
-            const el = document.createElement('div');
-            el.className = 'added-element';
-            el.style.left = `${x}px`;
-            el.style.top = `${y}px`;
+            el.className = `added-element added-replace font-${fontType.toLowerCase()}-pdf`;
+            el.dataset.fontType = fontType;
+            el.style.left = `${x}px`; el.style.top = `${y}px`;
+            el.style.minWidth = `${w}px`; el.style.minHeight = `${h}px`;
 
             const input = document.createElement('div');
             input.contentEditable = true;
             input.className = 'added-text';
-            input.innerText = 'Type here';
-            input.style.fontSize = '16px'; 
-
-            el.appendChild(createDeleteBtn(el));
+            input.innerText = text;
+            input.style.fontSize = `${h * 0.9}px`;
+            
+            el.onclick = (e) => { e.stopPropagation(); selectElement(el); };
             el.appendChild(input);
+            el.appendChild(createDelBtn(el));
             parent.appendChild(el);
-
-            setTimeout(() => input.focus(), 10);
+            
             makeDraggable(el);
+            selectElement(el);
+            setTimeout(() => {
+                input.focus();
+                document.execCommand('selectAll', false, null);
+            }, 10);
         }
 
-        function createWhiteout(x, y, parent) {
+        function selectElement(el) {
+            deselectAll();
+            State.selectedElement = el;
+            el.classList.add('selected');
+            if (el.dataset.fontType) {
+                UI.fontSelector.classList.remove('hidden');
+                UI.fontFamilySelect.value = el.dataset.fontType;
+            }
+        }
+
+        function updateSelectedFont() {
+            if (!State.selectedElement) return;
+            const font = UI.fontFamilySelect.value;
+            State.selectedElement.dataset.fontType = font;
+            State.selectedElement.className = State.selectedElement.className.replace(/font-\w+-pdf/g, '');
+            State.selectedElement.classList.add(`font-${font.toLowerCase()}-pdf`);
+        }
+
+        function createTextElement(e, parent) {
+            const rect = parent.getBoundingClientRect();
+            createReplaceBox(e.clientX - rect.left, e.clientY - rect.top, 100, 20, 'New Text', 'Sans', parent);
+            setTool('cursor');
+        }
+
+        function createWhiteout(e, parent) {
+            const rect = parent.getBoundingClientRect();
             const el = document.createElement('div');
             el.className = 'added-element added-whiteout';
-            el.style.left = `${x}px`;
-            el.style.top = `${y}px`;
-            el.style.width = '100px';
-            el.style.height = '20px';
-            el.style.resize = 'both';
-            el.style.overflow = 'hidden';
-
-            el.appendChild(createDeleteBtn(el));
+            el.style.left = `${e.clientX - rect.left}px`;
+            el.style.top = `${e.clientY - rect.top}px`;
+            el.style.width = '80px'; el.style.height = '20px';
+            el.style.resize = 'both'; el.style.overflow = 'hidden';
+            el.appendChild(createDelBtn(el));
             parent.appendChild(el);
             makeDraggable(el);
+            setTool('cursor');
         }
 
-        function createDeleteBtn(parentEl) {
-            const btn = document.createElement('button');
-            btn.innerHTML = '&times;';
-            btn.className = 'absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 hidden group-hover:block z-50';
-            btn.onclick = (e) => { e.stopPropagation(); parentEl.remove(); };
-            parentEl.classList.add('group');
-            return btn;
+        function createDelBtn(parent) {
+            const b = document.createElement('button');
+            b.innerHTML = '&times;';
+            b.className = 'absolute -top-3 -right-3 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition';
+            parent.classList.add('group');
+            b.onclick = (e) => { e.stopPropagation(); parent.remove(); deselectAll(); };
+            return b;
         }
 
         function makeDraggable(el) {
-            let isDragging = false;
-            let startX, startY, initialLeft, initialTop;
-
-            el.addEventListener('mousedown', (e) => {
-                if(State.activeTool !== 'cursor') return;
-                if(e.target.tagName === 'BUTTON' || e.target.classList.contains('resize-handle')) return;
-                
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                initialLeft = el.offsetLeft;
-                initialTop = el.offsetTop;
-                el.style.cursor = 'grabbing';
-            });
-
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                e.preventDefault();
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-                el.style.left = `${initialLeft + dx}px`;
-                el.style.top = `${initialTop + dy}px`;
-            });
-
-            window.addEventListener('mouseup', () => {
-                isDragging = false;
-                el.style.cursor = 'move';
-            });
+            let drag = false, sx, sy, il, it;
+            el.onmousedown = (e) => {
+                if (State.activeTool !== 'cursor' || e.target.tagName === 'BUTTON') return;
+                drag = true; sx = e.clientX; sy = e.clientY;
+                il = el.offsetLeft; it = el.offsetTop;
+            };
+            window.onmousemove = (e) => {
+                if (!drag) return;
+                el.style.left = `${il + (e.clientX - sx)}px`;
+                el.style.top = `${it + (e.clientY - sy)}px`;
+            };
+            window.onmouseup = () => drag = false;
         }
 
-        // --- Drawing ---
         function initDrawingEvents(canvas) {
             const ctx = canvas.getContext('2d');
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = 'blue'; 
-            ctx.lineWidth = 2;
-
-            canvas.addEventListener('mousedown', (e) => {
+            ctx.lineCap = 'round'; ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2;
+            canvas.onmousedown = (e) => {
                 if (State.activeTool !== 'draw') return;
                 State.isDrawing = true;
-                const rect = canvas.getBoundingClientRect();
-                State.lastPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-            });
-
-            canvas.addEventListener('mousemove', (e) => {
-                if (!State.isDrawing || State.activeTool !== 'draw') return;
-                const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-
-                ctx.beginPath();
-                ctx.moveTo(State.lastPos.x, State.lastPos.y);
-                ctx.lineTo(x, y);
-                ctx.stroke();
+                const r = canvas.getBoundingClientRect();
+                State.lastPos = { x: e.clientX - r.left, y: e.clientY - r.top };
+            };
+            canvas.onmousemove = (e) => {
+                if (!State.isDrawing) return;
+                const r = canvas.getBoundingClientRect();
+                const x = e.clientX - r.left, y = e.clientY - r.top;
+                ctx.beginPath(); ctx.moveTo(State.lastPos.x, State.lastPos.y);
+                ctx.lineTo(x, y); ctx.stroke();
                 State.lastPos = { x, y };
-            });
-
-            ['mouseup', 'mouseout'].forEach(evt => 
-                canvas.addEventListener(evt, () => State.isDrawing = false)
-            );
+            };
+            window.onmouseup = () => State.isDrawing = false;
         }
 
-        // --- Images ---
         function triggerImageUpload() { document.getElementById('image-upload').click(); }
-
         function handleImageUpload(e) {
-            const file = e.target.files[0];
-            if(!file) return;
+            const file = e.target.files[0]; if(!file) return;
             const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
+            reader.onload = (ev) => {
+                const img = new Image(); img.src = ev.target.result;
                 img.onload = () => {
-                    const firstPage = document.querySelector('.interaction-layer');
-                    if(firstPage) {
-                        const el = document.createElement('div');
-                        el.className = 'added-element';
-                        el.style.left = '50px'; el.style.top = '50px';
-                        
-                        img.className = 'added-image';
-                        img.style.width = '150px';
-                        
-                        const handle = document.createElement('div');
-                        handle.className = 'resize-handle';
-                        initResize(handle, el, img);
-
-                        el.append(img, handle, createDeleteBtn(el));
-                        firstPage.appendChild(el);
-                        makeDraggable(el);
-                        setTool('cursor');
-                    }
+                    const layer = document.querySelector('.interaction-layer');
+                    const el = document.createElement('div');
+                    el.className = 'added-element'; el.style.left = '50px'; el.style.top = '50px';
+                    img.style.width = '150px'; img.className = 'pointer-events-none';
+                    const h = document.createElement('div');
+                    h.className = 'absolute bottom-0 right-0 w-3 h-3 bg-blue-500 cursor-nwse-resize';
+                    h.onmousedown = (me) => {
+                        me.stopPropagation();
+                        const startW = img.offsetWidth, startX = me.clientX;
+                        window.onmousemove = (we) => img.style.width = `${startW + (we.clientX - startX)}px`;
+                        window.onmouseup = () => window.onmousemove = null;
+                    };
+                    el.append(img, h, createDelBtn(el)); layer.appendChild(el);
+                    makeDraggable(el); setTool('cursor');
                 };
             };
             reader.readAsDataURL(file);
-            e.target.value = '';
         }
 
-        function initResize(handle, container, img) {
-            let isResizing = false;
-            let startX, startWidth;
-            handle.addEventListener('mousedown', (e) => {
-                e.stopPropagation(); isResizing = true;
-                startX = e.clientX; startWidth = img.offsetWidth;
-            });
-            window.addEventListener('mousemove', (e) => {
-                if(!isResizing) return;
-                const newWidth = Math.max(20, startWidth + (e.clientX - startX));
-                img.style.width = `${newWidth}px`;
-            });
-            window.addEventListener('mouseup', () => isResizing = false);
-        }
-
-        // --- Page Ops ---
-        function rotatePage(pageId, angle) {
-            const p = State.pages.find(pg => pg.id === pageId);
-            if(p) {
-                p.rotation = (p.rotation + angle) % 360;
-                document.getElementById(pageId).style.transform = `rotate(${p.rotation}deg)`;
-            }
-        }
-        function deletePage(pageId) {
-            if(confirm("Delete this page?")) {
-                document.getElementById(pageId).remove();
-                State.pages = State.pages.filter(p => p.id !== pageId);
-            }
-        }
-
-        // --- Save ---
         async function savePDF() {
-            toggleLoading(true, "Generating PDF...");
+            toggleLoading(true, "Encoding Fonts & Elements...");
             try {
-                const newPdf = await PDFLib.PDFDocument.create();
-                const helveticaFont = await newPdf.embedFont(PDFLib.StandardFonts.Helvetica);
+                const outPdf = await PDFLib.PDFDocument.create();
+                const fonts = {
+                    Sans: await outPdf.embedFont(PDFLib.StandardFonts.Helvetica),
+                    Serif: await outPdf.embedFont(PDFLib.StandardFonts.TimesRoman),
+                    Mono: await outPdf.embedFont(PDFLib.StandardFonts.Courier)
+                };
 
-                const pageContainers = document.querySelectorAll('.pdf-page-container');
-                
-                for (let container of pageContainers) {
-                    const pageId = container.id;
-                    const pageData = State.pages.find(p => p.id === pageId);
-                    if (!pageData) continue;
-
-                    const [copiedPage] = await newPdf.copyPages(State.pdfDoc, [pageData.originalIndex]);
-                    const newPage = newPdf.addPage(copiedPage);
-
-                    const currentRotation = newPage.getRotation().angle;
-                    newPage.setRotation(PDFLib.degrees(currentRotation + pageData.rotation));
-
+                const containers = document.querySelectorAll('.pdf-page-container');
+                for (let container of containers) {
+                    const data = State.pages.find(p => p.id === container.id);
+                    const [page] = await outPdf.copyPages(State.pdfDoc, [data.originalIndex]);
+                    const newPage = outPdf.addPage(page);
                     const { width, height } = newPage.getSize();
-                    const scaleX = width / pageData.width;
-                    const scaleY = height / pageData.height;
+                    const sX = width / data.width, sY = height / data.height;
 
-                    // 1. Embed Drawings
-                    const drawCanvas = container.querySelector('.drawing-layer');
-                    if (drawCanvas) {
-                        const drawData = drawCanvas.toDataURL('image/png');
-                        if (drawData.length > 500) {
-                            const img = await newPdf.embedPng(drawData);
-                            newPage.drawImage(img, { x:0, y:0, width, height });
-                        }
+                    // Drawings
+                    const dCanvas = container.querySelector('.drawing-layer');
+                    const dData = dCanvas.toDataURL('image/png');
+                    if (dData.length > 500) {
+                        const img = await outPdf.embedPng(dData);
+                        newPage.drawImage(img, { x:0, y:0, width, height });
                     }
 
-                    // 2. Embed Elements
-                    const interactionLayer = container.querySelector('.interaction-layer');
-                    const elements = interactionLayer.querySelectorAll('.added-element');
-                    
-                    for (let el of elements) {
-                        const domX = el.offsetLeft;
-                        const domY = el.offsetTop;
-                        const domW = el.offsetWidth;
-                        const domH = el.offsetHeight;
-                        
-                        const pdfX = domX * scaleX;
-                        const pdfY = height - (domY * scaleY) - (domH * scaleY);
-                        const pdfW = domW * scaleX;
-                        const pdfH = domH * scaleY;
+                    // Elements
+                    container.querySelectorAll('.added-element').forEach(async el => {
+                        const x = el.offsetLeft * sX, w = el.offsetWidth * sX, h = el.offsetHeight * sY;
+                        const y = height - (el.offsetTop * sY) - h;
 
-                        // Case A: Image
-                        const imgEl = el.querySelector('img.added-image');
-                        if (imgEl) {
-                            try {
-                                const bytes = await fetch(imgEl.src).then(r => r.arrayBuffer());
-                                const embed = imgEl.src.includes('jpeg') ? await newPdf.embedJpg(bytes) : await newPdf.embedPng(bytes);
-                                // Recalculate H to maintain aspect
-                                const drawnH = (pdfW / embed.width) * embed.height;
-                                const drawnY = height - (domY * scaleY) - drawnH;
-                                newPage.drawImage(embed, { x: pdfX, y: drawnY, width: pdfW, height: drawnH });
-                            } catch(e) { console.error(e); }
-                            continue;
-                        }
-
-                        // Case B: Whiteout or Smart Edit Box (needs white bg)
                         if (el.classList.contains('added-whiteout') || el.classList.contains('added-replace')) {
-                            newPage.drawRectangle({
-                                x: pdfX, y: pdfY, width: pdfW, height: pdfH,
-                                color: PDFLib.rgb(1, 1, 1)
-                            });
+                            newPage.drawRectangle({ x, y, width: w, height: h, color: PDFLib.rgb(1, 1, 1) });
                         }
 
-                        // Case C: Text (inside normal text or smart edit)
-                        const textDiv = el.querySelector('.added-text');
-                        if (textDiv && textDiv.innerText.trim()) {
-                            // Rough font size calc
-                            const visualFontSize = parseFloat(textDiv.style.fontSize) || 16;
-                            const pdfFontSize = visualFontSize * (width / pageData.pdfWidth);
-                            
-                            // Adjust Y for baseline
-                            const textY = pdfY + (pdfH / 2) - (pdfFontSize / 3); 
-
-                            newPage.drawText(textDiv.innerText, {
-                                x: pdfX + (4 * scaleX), // padding
-                                y: textY,
-                                size: pdfFontSize,
-                                font: helveticaFont,
-                                color: PDFLib.rgb(0, 0, 0)
+                        const text = el.querySelector('.added-text');
+                        if (text && text.innerText.trim()) {
+                            const fontType = el.dataset.fontType || 'Sans';
+                            const fSize = (parseFloat(text.style.fontSize) || 16) * (width / data.pdfWidth);
+                            newPage.drawText(text.innerText, {
+                                x: x + (2 * sX), y: y + (h/2) - (fSize/3),
+                                size: fSize, font: fonts[fontType], color: PDFLib.rgb(0, 0, 0)
                             });
                         }
-                    }
+                        
+                        const img = el.querySelector('img');
+                        if (img) {
+                            const bytes = await fetch(img.src).then(r => r.arrayBuffer());
+                            const embed = await outPdf.embedPng(bytes);
+                            newPage.drawImage(embed, { x, y, width: w, height: h });
+                        }
+                    });
                 }
-
-                const pdfBytes = await newPdf.save();
-                download(pdfBytes, "smart_edited.pdf", "application/pdf");
-
-            } catch (err) {
-                console.error(err);
-                alert("Error saving: " + err.message);
-            } finally {
-                toggleLoading(false);
-            }
+                const bytes = await outPdf.save();
+                download(bytes, "edited_pro.pdf", "application/pdf");
+            } catch (e) { alert(e.message); } finally { toggleLoading(false); }
         }
     </script>
 </body>
