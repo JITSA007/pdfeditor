@@ -32,7 +32,6 @@
             background: white;
         }
 
-        /* Text Layer Styles */
         .text-layer {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -63,7 +62,6 @@
             pointer-events: none; 
         }
 
-        /* Added Elements */
         .added-element {
             position: absolute;
             pointer-events: auto;
@@ -84,12 +82,11 @@
             line-height: 1.1;
         }
 
-        /* Font Classes */
         .font-sans-pdf { font-family: Arial, Helvetica, sans-serif; }
         .font-serif-pdf { font-family: 'Times New Roman', Times, serif; }
         .font-mono-pdf { font-family: 'Courier New', Courier, monospace; }
 
-        .added-whiteout { background-color: white; }
+        .added-whiteout { background-color: white; border: 1px solid #ddd; }
         .added-replace { background-color: white; display: flex; align-items: center; }
 
         .drawing-layer { position: absolute; top: 0; left: 0; z-index: 15; pointer-events: none; }
@@ -132,7 +129,15 @@
                 <i class="ph ph-text-t text-lg"></i>
             </button>
 
-            <!-- Font Selector (Visible when text selected) -->
+            <!-- Undo/Redo -->
+            <div class="w-px h-6 bg-gray-300 mx-1"></div>
+            <button onclick="undo()" class="p-2 rounded-lg hover:bg-white transition text-gray-600" title="Undo">
+                <i class="ph ph-arrow-u-up-left text-lg"></i>
+            </button>
+            <button onclick="redo()" class="p-2 rounded-lg hover:bg-white transition text-gray-600" title="Redo">
+                <i class="ph ph-arrow-u-up-right text-lg"></i>
+            </button>
+
             <div id="font-selector-container" class="hidden flex items-center gap-2 ml-2 pl-2 border-l border-gray-300">
                 <select id="font-family-select" onchange="updateSelectedFont()" class="bg-white border border-gray-300 rounded text-sm p-1 outline-none">
                     <option value="Sans">Sans-Serif</option>
@@ -202,7 +207,9 @@
             scale: 1.5,
             isDrawing: false,
             lastPos: { x: 0, y: 0 },
-            selectedElement: null
+            selectedElement: null,
+            history: [],
+            redoStack: []
         };
 
         const UI = {
@@ -223,6 +230,43 @@
             UI.loadingText.innerText = text;
         }
 
+        // --- History Logic ---
+        function saveToHistory() {
+            const snapshot = Array.from(document.querySelectorAll('.interaction-layer')).map(layer => layer.innerHTML);
+            State.history.push(snapshot);
+            if (State.history.length > 50) State.history.shift();
+            State.redoStack = [];
+        }
+
+        function undo() {
+            if (State.history.length <= 1) return;
+            const current = State.history.pop();
+            State.redoStack.push(current);
+            const previous = State.history[State.history.length - 1];
+            restoreState(previous);
+        }
+
+        function redo() {
+            if (State.redoStack.length === 0) return;
+            const next = State.redoStack.pop();
+            State.history.push(next);
+            restoreState(next);
+        }
+
+        function restoreState(snapshot) {
+            const layers = document.querySelectorAll('.interaction-layer');
+            layers.forEach((layer, i) => {
+                layer.innerHTML = snapshot[i] || '';
+                // Re-bind events to restored elements
+                layer.querySelectorAll('.added-element').forEach(el => {
+                    makeDraggable(el);
+                    el.onclick = (e) => { e.stopPropagation(); selectElement(el); };
+                    const delBtn = el.querySelector('button');
+                    if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); el.remove(); deselectAll(); saveToHistory(); };
+                });
+            });
+        }
+
         async function handleUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -237,6 +281,7 @@
                 UI.uploadSection.classList.add('hidden');
                 UI.newProjectBtn.classList.remove('hidden');
                 UI.downloadBtn.classList.remove('hidden');
+                saveToHistory();
             } catch (err) {
                 alert("Error: " + err.message);
             } finally {
@@ -285,7 +330,6 @@
                     span.style.top = `${tx[5] - fontHeight}px`;
                     span.style.fontSize = `${fontHeight}px`;
                     
-                    // GUESSED FONT TYPE
                     let fontType = 'Sans';
                     const name = (item.fontName || '').toLowerCase();
                     if (name.includes('times') || name.includes('serif')) fontType = 'Serif';
@@ -338,9 +382,9 @@
             const lRect = layer.getBoundingClientRect();
             const x = rect.left - lRect.left;
             const y = rect.top - lRect.top;
-            
             createReplaceBox(x, y, rect.width + 6, rect.height, span.textContent, span.dataset.fontType, layer);
             setTool('cursor');
+            saveToHistory();
         }
 
         function createReplaceBox(x, y, w, h, text, fontType, parent) {
@@ -355,6 +399,7 @@
             input.className = 'added-text';
             input.innerText = text;
             input.style.fontSize = `${h * 0.9}px`;
+            input.oninput = () => saveToHistory();
             
             el.onclick = (e) => { e.stopPropagation(); selectElement(el); };
             el.appendChild(input);
@@ -385,12 +430,14 @@
             State.selectedElement.dataset.fontType = font;
             State.selectedElement.className = State.selectedElement.className.replace(/font-\w+-pdf/g, '');
             State.selectedElement.classList.add(`font-${font.toLowerCase()}-pdf`);
+            saveToHistory();
         }
 
         function createTextElement(e, parent) {
             const rect = parent.getBoundingClientRect();
             createReplaceBox(e.clientX - rect.left, e.clientY - rect.top, 100, 20, 'New Text', 'Sans', parent);
             setTool('cursor');
+            saveToHistory();
         }
 
         function createWhiteout(e, parent) {
@@ -405,14 +452,15 @@
             parent.appendChild(el);
             makeDraggable(el);
             setTool('cursor');
+            saveToHistory();
         }
 
         function createDelBtn(parent) {
             const b = document.createElement('button');
             b.innerHTML = '&times;';
-            b.className = 'absolute -top-3 -right-3 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition';
+            b.className = 'absolute -top-3 -right-3 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow-sm';
             parent.classList.add('group');
-            b.onclick = (e) => { e.stopPropagation(); parent.remove(); deselectAll(); };
+            b.onclick = (e) => { e.stopPropagation(); parent.remove(); deselectAll(); saveToHistory(); };
             return b;
         }
 
@@ -428,7 +476,7 @@
                 el.style.left = `${il + (e.clientX - sx)}px`;
                 el.style.top = `${it + (e.clientY - sy)}px`;
             };
-            window.onmouseup = () => drag = false;
+            window.onmouseup = () => { if(drag) saveToHistory(); drag = false; };
         }
 
         function initDrawingEvents(canvas) {
@@ -448,7 +496,7 @@
                 ctx.lineTo(x, y); ctx.stroke();
                 State.lastPos = { x, y };
             };
-            window.onmouseup = () => State.isDrawing = false;
+            window.onmouseup = () => { if(State.isDrawing) saveToHistory(); State.isDrawing = false; };
         }
 
         function triggerImageUpload() { document.getElementById('image-upload').click(); }
@@ -468,10 +516,11 @@
                         me.stopPropagation();
                         const startW = img.offsetWidth, startX = me.clientX;
                         window.onmousemove = (we) => img.style.width = `${startW + (we.clientX - startX)}px`;
-                        window.onmouseup = () => window.onmousemove = null;
+                        window.onmouseup = () => { window.onmousemove = null; saveToHistory(); };
                     };
                     el.append(img, h, createDelBtn(el)); layer.appendChild(el);
                     makeDraggable(el); setTool('cursor');
+                    saveToHistory();
                 };
             };
             reader.readAsDataURL(file);
@@ -503,15 +552,18 @@
                         newPage.drawImage(img, { x:0, y:0, width, height });
                     }
 
-                    // Elements
-                    container.querySelectorAll('.added-element').forEach(async el => {
+                    // Elements - Use for...of for async safety
+                    const elements = container.querySelectorAll('.added-element');
+                    for (const el of elements) {
                         const x = el.offsetLeft * sX, w = el.offsetWidth * sX, h = el.offsetHeight * sY;
                         const y = height - (el.offsetTop * sY) - h;
 
+                        // Whiteout
                         if (el.classList.contains('added-whiteout') || el.classList.contains('added-replace')) {
                             newPage.drawRectangle({ x, y, width: w, height: h, color: PDFLib.rgb(1, 1, 1) });
                         }
 
+                        // Text
                         const text = el.querySelector('.added-text');
                         if (text && text.innerText.trim()) {
                             const fontType = el.dataset.fontType || 'Sans';
@@ -522,13 +574,16 @@
                             });
                         }
                         
+                        // Image
                         const img = el.querySelector('img');
                         if (img) {
-                            const bytes = await fetch(img.src).then(r => r.arrayBuffer());
-                            const embed = await outPdf.embedPng(bytes);
-                            newPage.drawImage(embed, { x, y, width: w, height: h });
+                            try {
+                                const bytes = await fetch(img.src).then(r => r.arrayBuffer());
+                                const embed = await outPdf.embedPng(bytes);
+                                newPage.drawImage(embed, { x, y, width: w, height: h });
+                            } catch(err) { console.error("Image save error", err); }
                         }
-                    });
+                    }
                 }
                 const bytes = await outPdf.save();
                 download(bytes, "edited_pro.pdf", "application/pdf");
